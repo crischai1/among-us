@@ -1,0 +1,40 @@
+{
+  "name": "among-us",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "A browser-based Among Us clone with online multiplayer rooms",
+  "scripts": {
+    "dev": "concurrently -k -n server,client -c magenta,cyan \"npm:dev:server\" \"npm:dev:client\"",
+    "dev:server": "DEV=1 PORT=8790 tsx watch server/index.ts",
+    "dev:client": "vite",
+    "build": "tsc -b && vite build",
+    "start": "NODE_ENV=production tsx server/index.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -b --noEmit"
+  },
+  "dependencies": {
+    "nanoid": "^5.1.11",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "tsx": "^4.22.4",
+    "ws": "^8.21.0",
+    "zustand": "^5.0.14"
+  },
+  "devDependencies": {
+    "@testing-library/dom": "^10.4.2",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@types/node": "^25.9.3",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@types/ws": "^8.18.1",
+    "@vitejs/plugin-react": "^6.0.2",
+    "concurrently": "^9.2.1",
+    "jsdom": "^29.1.1",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.16",
+    "vitest": "^4.1.9"
+  }
+}
