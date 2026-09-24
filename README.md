@@ -79,7 +79,7 @@ PORT=8080 npm start
 
 Rooms live in memory, so **run exactly one instance**.
 
-- **Render:** `render.yaml` is a ready Blueprint on the `starter` plan, which stays running (the free plan sleeps when idle, which ends any open rooms).
+- **Render:** `render.yaml` is a ready Blueprint on the free plan. Free services sleep after about 15 minutes with no traffic: the next visit takes up to a minute to wake it, and any open rooms are lost. Switch to `plan: starter` to keep it always on.
 - **Fly.io:** run `fly launch --no-deploy` (it picks up `fly.toml` and the `Dockerfile`), then `fly deploy`.
 - **Railway:** detected automatically from `package.json`; the build and start scripts work as-is.
 - **Any Docker host:** `docker build -t among-us . && docker run -p 8080:8080 among-us`.
