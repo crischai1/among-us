@@ -1,4 +1,6 @@
 import { INTERP_DELAY_MS } from '../../shared/constants';
+import { serverNow } from '../net/clock';
+import { JitterBuffer, sampleAt } from '../net/jitter';
 import { getMap, type CompiledMap } from '../../shared/map';
 import type { SnapMessage } from '../../shared/protocol';
 import { doorSegs, stepPlayer, type MoveCtx } from '../../shared/sim/movement';
@@ -22,10 +24,24 @@ export interface RemoteEnt {
   facing: 1 | -1;
   walk: number;
   moving: boolean;
+  /** Eased walk blend for animation (0 standing .. 1 walking) */
+  amp: number;
   /** Fade in/out alpha */
   alpha: number;
   present: boolean;
 }
+
+/** Walk cycle radians per world unit travelled. */
+export const WALK_RATE = 0.085;
+
+/** Ease the walk blend towards moving/standing so strides start and stop smoothly. */
+export function easeAmp(amp: number, moving: boolean, dtMs: number): number {
+  const k = 1 - Math.exp(-dtMs / (moving ? 60 : 90));
+  return amp + ((moving ? 1 : 0) - amp) * k;
+}
+
+/** Shared jitter buffer for remote-player interpolation. */
+export const jitter = new JitterBuffer();
 
 export interface PendingInput {
   seq: number;
@@ -61,6 +77,7 @@ export const world = {
     facing: 1 as 1 | -1,
     walk: 0,
     moving: false,
+    amp: 0,
     ready: false,
   },
   seq: 0,
@@ -126,12 +143,14 @@ export function applySnap(msg: SnapMessage): void {
     }
   }
 
+  jitter.note(serverNow() - msg.time);
+
   const seen = new Set<number>();
   for (const [eid, x, y, flags, look] of msg.ents) {
     seen.add(eid);
     let e = world.ents.get(eid);
     if (!e) {
-      e = { eid, samples: [], x, y, flags, look, facing: 1, walk: 0, moving: false, alpha: 0, present: true };
+      e = { eid, samples: [], x, y, flags, look, facing: 1, walk: 0, moving: false, amp: 0, alpha: 0, present: true };
       world.ents.set(eid, e);
     }
     if (!e.present) {
@@ -160,25 +179,10 @@ export function updateEnts(renderTime: number, dtMs: number): void {
     }
     const sm = e.samples;
     if (!sm.length) continue;
-    let nx = sm[sm.length - 1].x;
-    let ny = sm[sm.length - 1].y;
-    let latest = sm[sm.length - 1];
-    for (let i = sm.length - 1; i > 0; i--) {
-      const a = sm[i - 1];
-      const b = sm[i];
-      if (a.t <= renderTime && renderTime <= b.t) {
-        const k = b.t === a.t ? 1 : (renderTime - a.t) / (b.t - a.t);
-        nx = a.x + (b.x - a.x) * k;
-        ny = a.y + (b.y - a.y) * k;
-        latest = k < 0.5 ? a : b;
-        break;
-      }
-      if (i === 1 && renderTime < a.t) {
-        nx = a.x;
-        ny = a.y;
-        latest = a;
-      }
-    }
+    const at = sampleAt(sm, renderTime);
+    const nx = at.x;
+    const ny = at.y;
+    const latest = at;
     // Drop samples we've fully passed (keep one before renderTime)
     while (sm.length > 2 && sm[1].t < renderTime - INTERP_DELAY_MS) sm.shift();
     const dx = nx - e.x;
@@ -193,7 +197,8 @@ export function updateEnts(renderTime: number, dtMs: number): void {
       if (Math.abs(dx) > 0.2) e.facing = dx > 0 ? 1 : -1;
     }
     e.moving = d > 0.3 && d < 200;
-    if (e.moving) e.walk += d * 0.09;
+    if (e.moving) e.walk += d * WALK_RATE;
+    e.amp = easeAmp(e.amp, e.moving, dtMs);
     e.flags = latest.flags;
     e.look = latest.look;
   }

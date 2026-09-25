@@ -2,12 +2,13 @@ import { useEffect, useState } from 'react';
 import { SABOTAGE_LABEL } from '../../shared/rules/sabotage';
 import { CRITICAL_SABOTAGES, isImpostorRole, ROLE_LABEL } from '../../shared/types';
 import { canPressButton, doKill, doReport, doUse, doVent, openOverlay, toggleMap } from '../game/actions';
-import { serverNow } from '../net/clock';
+import { lastRtt, serverNow } from '../net/clock';
 import { leaveRoom, send } from '../net/session';
 import { camera } from '../render/loop';
 import { useGame } from '../store/game';
 import { useSession } from '../store/session';
-import { world } from '../world/world';
+import { jitter, world } from '../world/world';
+import { TASK_THEME } from '../tasks/theme';
 import { Chat } from './Chat';
 import { Cutscenes } from './cutscenes/Cutscenes';
 import { MeetingScreen } from './MeetingScreen';
@@ -93,8 +94,11 @@ function TaskPanel({ dead }: { dead: boolean }) {
                 {imp && <div className="fake-label">Fake Tasks:</div>}
                 {priv.tasks.map((t) => (
                   <div key={t.id} className={`task ${t.done ? 'done' : t.step > 0 ? 'progress' : ''} ${imp ? 'fake' : ''}`}>
-                    {t.room}: {t.name}
-                    {t.steps > 1 && ` (${t.done ? t.steps : t.step}/${t.steps})`}
+                    <span className="task-icon">{t.done ? '✓' : TASK_THEME[t.type].icon}</span>
+                    <span>
+                      {t.room}: {t.name}
+                      {t.steps > 1 && ` (${t.done ? t.steps : t.step}/${t.steps})`}
+                    </span>
                   </div>
                 ))}
               </>
@@ -119,6 +123,20 @@ function SabotageBanner() {
   );
 }
 
+/** Shows only when the connection is struggling, so a laggy player knows why. */
+function ConnectionBadge() {
+  useNow(1000);
+  const rtt = lastRtt();
+  const delay = jitter.delay;
+  if (rtt < 180 && delay < 180) return null;
+  const bad = rtt > 350 || delay > 330;
+  return (
+    <span className={`conn-badge ${bad ? 'bad' : ''}`} title="Round-trip time to the server">
+      📶 {Math.round(rtt)} ms
+    </span>
+  );
+}
+
 function TopRight({ dead }: { dead: boolean }) {
   const room = useSession((s) => s.room);
   return (
@@ -129,6 +147,7 @@ function TopRight({ dead }: { dead: boolean }) {
       <button className="hud-btn small-round" title="Settings" onClick={() => openOverlay({ kind: 'settings' })}>
         ⚙
       </button>
+      <ConnectionBadge />
       {room?.dev && <span className="dev-tag">DEV{dead ? ' · ghost' : ''}</span>}
       <button
         className="hud-btn small-round"

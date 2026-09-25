@@ -1,4 +1,4 @@
-import { INTERP_DELAY_MS, LIGHTS_FADE_MS, LIGHTS_VISION_FACTOR, TICK_MS, VISION_BASE } from '../../shared/constants';
+import { LIGHTS_FADE_MS, LIGHTS_VISION_FACTOR, TICK_MS, VISION_BASE } from '../../shared/constants';
 import { clamp, dist, lerp } from '../../shared/geom';
 import { CRITICAL_SABOTAGES, F_GHOST, isImpostorRole } from '../../shared/types';
 import { doorSegs, stepPlayer } from '../../shared/sim/movement';
@@ -9,12 +9,18 @@ import { send } from '../net/session';
 import { useGame } from '../store/game';
 import { useSession } from '../store/session';
 import { computeNearby, sameNearby } from '../world/nearby';
-import { moveCtx, updateEnts, world } from '../world/world';
+import { easeAmp, jitter, moveCtx, updateEnts, WALK_RATE, world } from '../world/world';
 import { drawDebug, debugEnabled, debugState } from './debug';
 import { drawFog } from './fog';
-import { drawHighlight } from './props';
+import { drawHighlight, drawStationMarks, type StationMarks } from './props';
+import { SABOTAGE_STATIONS } from '../../shared/rules/sabotage';
+import { TASK_THEME } from '../tasks/theme';
 import { drawSceneEntities, drawSceneFloor, drawSceneTop, drawTags, type Look } from './scene';
 import { VOID, wallsPath } from './mapLayer';
+
+// The running loop keeps references to render functions, so hot-swapping any
+// render module would leave stale drawing code on screen: reload instead.
+if (import.meta.hot) import.meta.hot.accept(() => location.reload());
 
 /** World units visible vertically. */
 const VIEW_HEIGHT = 720;
@@ -104,7 +110,7 @@ export function startLoop(canvas: HTMLCanvasElement): () => void {
     const dt = Math.min(250, t - last);
     last = t;
     const now = serverNow();
-    updateEnts(now - INTERP_DELAY_MS, dt);
+    updateEnts(now - jitter.delay, dt);
 
     const s = world.self;
     const alpha = clamp((t - lastStepAt) / TICK_MS, 0, 1);
@@ -112,7 +118,8 @@ export function startLoop(canvas: HTMLCanvasElement): () => void {
     const sy = s.prevY + (s.y - s.prevY) * alpha + s.offY;
     const movedPx = Math.hypot(s.x - s.prevX, s.y - s.prevY);
     s.moving = movedPx > 0.1;
-    if (s.moving) s.walk += (movedPx * dt) / TICK_MS * 0.09;
+    if (s.moving) s.walk += ((movedPx * dt) / TICK_MS) * WALK_RATE;
+    s.amp = easeAmp(s.amp, s.moving, dt);
 
     // Size
     const dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -158,8 +165,14 @@ export function startLoop(canvas: HTMLCanvasElement): () => void {
       return hasLineOfSight(s.x, s.y, x, y - 12, map.visionGrid, doors) || hasLineOfSight(s.x, s.y, x, y - 34, map.visionGrid, doors);
     };
 
+    const marks: StationMarks = { tasks: new Map(), sabotage: new Set(), inRange: null };
+    if (inGame && priv && pub?.phase === 'playing' && !priv.venting) {
+      if (!isImpostorRole(priv.role)) for (const tk of priv.tasks) if (!tk.done) marks.tasks.set(tk.stationId, TASK_THEME[tk.type].icon);
+      if (!ghost && pub.sabotage) for (const id of SABOTAGE_STATIONS[pub.sabotage.kind]) marks.sabotage.add(id);
+      if (nearby.use && (nearby.use.kind === 'task' || nearby.use.kind === 'fix')) marks.inRange = nearby.use.id;
+    }
     drawSceneFloor(ctx, map, t, nearby.vent);
-    if (nearby.use) {
+    if (nearby.use && nearby.use.kind !== 'task' && nearby.use.kind !== 'fix') {
       const st = nearby.use.kind === 'button' ? map.def.button : nearby.use.kind === 'console' ? map.def.stations.find((x) => x.kind === nearby.use!.id) : map.stations.get(nearby.use.id);
       if (st) drawHighlight(ctx, st.x, st.y, nearby.use.kind === 'button' ? 30 : 22, t);
     }
@@ -187,6 +200,7 @@ export function startLoop(canvas: HTMLCanvasElement): () => void {
       ctx.fillRect(camera.x - W / k, camera.y - H / k, (2 * W) / k, (2 * H) / k);
       ctx.restore();
     }
+    drawStationMarks(ctx, map, t, marks, visible);
 
     const tags = drawSceneEntities(ctx, {
       map,
@@ -194,7 +208,7 @@ export function startLoop(canvas: HTMLCanvasElement): () => void {
       roster: list,
       self: priv?.venting
         ? null
-        : { x: sx, y: sy, look: shiftedLook ?? selfLook, flags: s.flags, facing: s.facing, walk: s.walk, moving: s.moving, red: !!priv && isImpostorRole(priv.role) },
+        : { x: sx, y: sy, look: shiftedLook ?? selfLook, flags: s.flags, facing: s.facing, walk: s.walk, amp: s.amp, red: !!priv && isImpostorRole(priv.role) },
       ghostView: ghost || !inGame,
       visible,
       fade: fogOn ? (x, y) => clamp((radius - dist(s.x, s.y, x, y)) / (radius * 0.22) + 0.15, 0, 1) : undefined,

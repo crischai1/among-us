@@ -16,7 +16,7 @@ export const TASK_DEFS: Record<TaskType, TaskDef> = {
   swipe: { type: 'swipe', category: 'common', name: 'Swipe Card', minMs: [700] },
   calibrate: { type: 'calibrate', category: 'short', name: 'Calibrate Distributor', minMs: [1500] },
   divert: { type: 'divert', category: 'short', name: 'Divert Power', minMs: [500, 300] },
-  transfer: { type: 'transfer', category: 'short', name: 'Download Data', minMs: [3000, 3000] },
+  transfer: { type: 'transfer', category: 'short', name: 'Download Data', minMs: [6000, 6000] },
   align: { type: 'align', category: 'short', name: 'Align Engine Output', minMs: [400, 400] },
   steering: { type: 'steering', category: 'short', name: 'Stabilize Steering', minMs: [400] },
   fuel: { type: 'fuel', category: 'long', name: 'Fuel Engines', minMs: [2000, 2000] },

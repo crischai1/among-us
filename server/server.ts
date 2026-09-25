@@ -18,11 +18,35 @@ export interface AppServerOptions {
   dev?: boolean;
   distDir?: string;
   host?: string;
+  /** Dev only: redirect page requests to the Vite dev server on this port. */
+  devClientPort?: number;
+  /** Dev/test only: simulate a bad connection (one-way delay plus random jitter, order preserved). */
+  simNet?: { lagMs: number; jitterMs: number };
+}
+
+/**
+ * Delay a stream of callbacks by lag + random jitter without reordering, like
+ * TCP on bad wifi. A single FIFO queue guarantees order (separate timers don't).
+ */
+function laggy(sim: { lagMs: number; jitterMs: number }) {
+  const q: { at: number; fn: () => void }[] = [];
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const pump = () => {
+    timer = null;
+    while (q.length && q[0].at <= Date.now()) q.shift()!.fn();
+    if (q.length) timer = setTimeout(pump, q[0].at - Date.now());
+  };
+  return (fn: () => void) => {
+    const prev = q.length ? q[q.length - 1].at : 0;
+    const at = Math.max(prev, Date.now() + sim.lagMs + Math.random() * sim.jitterMs);
+    q.push({ at, fn });
+    if (!timer) timer = setTimeout(pump, at - Date.now());
+  };
 }
 
 /** HTTP (static client) and WebSocket (/ws) on one port. */
 export function createAppServer(opts: AppServerOptions): Promise<AppServer> {
-  const http = createHttpServer(opts.distDir ?? 'dist');
+  const http = createHttpServer(opts.distDir ?? 'dist', opts.devClientPort);
   const wss = new WebSocketServer({ server: http, path: '/ws', maxPayload: 8 * 1024 });
   const rooms = new Map<string, ServerRoom>();
   const alive = new WeakMap<WebSocket, boolean>();
@@ -34,6 +58,13 @@ export function createAppServer(opts: AppServerOptions): Promise<AppServer> {
   };
 
   wss.on('connection', (ws) => {
+    const sim = opts.simNet;
+    if (sim) {
+      const out = laggy(sim);
+      const rawSend = ws.send.bind(ws);
+      ws.send = ((data: string) => out(() => ws.readyState === ws.OPEN && rawSend(data))) as typeof ws.send;
+    }
+    const inbound = sim ? laggy(sim) : (fn: () => void) => fn();
     let room: ServerRoom | null = null;
     let member: Member | null = null;
     alive.set(ws, true);
@@ -44,7 +75,8 @@ export function createAppServer(opts: AppServerOptions): Promise<AppServer> {
       sendWs(ws, { t: 'lobby', room: room!.roomState() });
     };
 
-    ws.on('message', (data) => {
+    ws.on('message', (data) => inbound(() => handleMessage(data)));
+    const handleMessage = (data: import('ws').RawData) => {
       let msg: ClientMessage;
       try {
         msg = JSON.parse(data.toString());
@@ -93,7 +125,7 @@ export function createAppServer(opts: AppServerOptions): Promise<AppServer> {
         return;
       }
       room.handle(member, msg, now);
-    });
+    };
 
     ws.on('close', () => {
       if (room && member && member.ws === ws) room.disconnect(ws, Date.now());

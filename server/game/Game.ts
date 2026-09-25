@@ -18,7 +18,7 @@ import {
   type SabotageState, type WinReason, type Winner,
 } from '../../shared/types';
 import { handleAction } from './actions';
-import { takeInputs, type Body, type Meeting, type SPlayer } from './types';
+import { INPUT_BURST, takeInputs, type Body, type Meeting, type SPlayer } from './types';
 import { buildPriv, buildPub, buildSnap } from './views';
 
 export interface GamePlayerInit {
@@ -108,6 +108,7 @@ export class Game {
         gen: 1,
         inputs: [],
         lastSeq: 0,
+        inputBudget: INPUT_BURST,
         tasks: tasks.get(init.id) ?? [],
         killReadyAt: opts.now + REVEAL_MS + INITIAL_KILL_COOLDOWN_MS,
         emergencyUsed: 0,

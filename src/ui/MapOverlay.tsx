@@ -2,6 +2,7 @@ import { SKELD } from '../../shared/map/skeld';
 import { SABOTAGE_STATIONS } from '../../shared/rules/sabotage';
 import { isImpostorRole, type SabotageKind } from '../../shared/types';
 import { closeOverlay } from '../game/actions';
+import { TASK_THEME } from '../tasks/theme';
 import { send } from '../net/session';
 import { useGame } from '../store/game';
 import { world } from '../world/world';
@@ -77,9 +78,12 @@ export function MapOverlay() {
               .map((t) => {
                 const st = world.map.stations.get(t.stationId);
                 return st ? (
-                  <text key={t.id} x={st.x} y={st.y} className="map-task">
-                    !
-                  </text>
+                  <g key={t.id} className="map-task">
+                    <circle cx={st.x} cy={st.y} r={42} />
+                    <text x={st.x} y={st.y + 4}>
+                      {TASK_THEME[t.type].icon}
+                    </text>
+                  </g>
                 ) : null;
               })}
           {sab &&

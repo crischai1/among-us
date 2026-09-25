@@ -53,6 +53,7 @@ To play with several people on one machine, use several tabs. Each tab keeps its
   - `/meeting` — start a meeting
   - `/die` — become a ghost
   - `/home` — go back to spawn
+- **Simulated bad wifi:** start the dev server with `NET_LAG=80 NET_JITTER=400 npm run dev` to add up to that much delay to every message (order preserved, like real TCP). The HUD shows a 📶 badge when the connection is slow.
 - **`?debug` in the URL:** shows the map-authoring overlay (collision segments, room ids, vent links, station ids, camera views, doors). It also shows the world coordinates under the cursor; click to copy them.
   - `G` toggles fog.
   - `N` toggles noclip.

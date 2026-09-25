@@ -9,7 +9,7 @@ import { applySettingsPatch, DEFAULT_SETTINGS, type GameSettings } from '../shar
 import { stepPlayer } from '../shared/sim/movement';
 import { ROLES, type EntTuple, type Role, type RoomState } from '../shared/types';
 import { Game } from './game/Game';
-import { queueInput, takeInputs, type Input } from './game/types';
+import { INPUT_BURST, queueInput, takeInputs, type Input } from './game/types';
 
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
 
@@ -40,10 +40,17 @@ export interface Member {
   gen: number;
   inputs: Input[];
   lastSeq: number;
+  inputBudget: number;
 }
 
+/** Above this much unsent data, skip snapshots: a newer one replaces them anyway. */
+const SNAPSHOT_BACKLOG_BYTES = 16 * 1024;
+
 export function sendWs(ws: WebSocket | null, msg: ServerMessage): void {
-  if (ws && ws.readyState === ws.OPEN) ws.send(JSON.stringify(msg));
+  if (!ws || ws.readyState !== ws.OPEN) return;
+  // On a slow link, piling up stale snapshots makes everything lag further behind.
+  if (msg.t === 'snap' && ws.bufferedAmount > SNAPSHOT_BACKLOG_BYTES) return;
+  ws.send(JSON.stringify(msg));
 }
 
 export class ServerRoom {
@@ -109,6 +116,7 @@ export class ServerRoom {
       gen: 1,
       inputs: [],
       lastSeq: 0,
+      inputBudget: INPUT_BURST,
     };
     this.members.set(id, m);
     if (!this.hostId) this.hostId = id;

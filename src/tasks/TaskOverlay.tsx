@@ -3,6 +3,7 @@ import { closeOverlay } from '../game/actions';
 import { send } from '../net/session';
 import { useGame } from '../store/game';
 import { TASK_GAMES } from './registry';
+import { TASK_THEME } from './theme';
 
 export function TaskOverlay({ stationId }: { stationId: string }) {
   const task = useGame((s) => s.priv?.tasks.find((t) => !t.done && t.stationId === stationId));
@@ -25,12 +26,18 @@ export function TaskOverlay({ stationId }: { stationId: string }) {
 
   return (
     <div className="overlay-backdrop" onClick={closeOverlay}>
-      <div className="panel task-frame" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="panel task-frame"
+        style={{ '--task-accent': TASK_THEME[t.type].color } as React.CSSProperties}
+        onClick={(e) => e.stopPropagation()}
+      >
         <button className="close-x" onClick={closeOverlay}>
           ✕
         </button>
         <div className="task-title">
+          <span className="task-title-icon">{TASK_THEME[t.type].icon}</span>
           {t.name} <span>· {t.room}</span>
+          {t.steps > 1 && <span className="task-steps">Step {t.step + 1} of {t.steps}</span>}
         </div>
         <div className="task-body">
           <Game step={t.step} params={t.params} onComplete={complete} />

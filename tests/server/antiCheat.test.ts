@@ -2,17 +2,21 @@ import { describe, expect, it } from 'vitest';
 import { BASE_SPEED, DT, REVEAL_MS } from '../../shared/constants';
 import { F_TEAMMATE } from '../../shared/types';
 import { makeGame, place } from './helpers';
+import { INPUT_BURST, MAX_INPUTS_PER_TICK } from '../../server/game/types';
 
 describe('anti-cheat', () => {
-  it('flooding inputs moves at most two steps per tick', () => {
+  it('flooding inputs cannot outrun real time', () => {
     const h = makeGame(4, { p0: 'impostor' });
     const { g } = h;
     h.advance(REVEAL_MS + 100);
     place(g, 'p1', 1500, 400);
     for (let i = 1; i <= 100; i++) h.act('p1', { t: 'input', seq: i, dx: 1, dy: 0 });
-    h.advance(1000);
-    // The queue is capped, so a flood of 100 inputs buys at most 8 steps.
-    expect(g.byId.get('p1')!.x - 1500).toBeLessThanOrEqual(8 * BASE_SPEED * DT + 0.01);
+    h.advance(100);
+    // ~3 ticks: at most MAX_INPUTS_PER_TICK steps each
+    expect(g.byId.get('p1')!.x - 1500).toBeLessThanOrEqual(4 * MAX_INPUTS_PER_TICK * BASE_SPEED * DT + 0.01);
+    h.advance(900);
+    // 1 s = 30 ticks: never more than real time plus the burst allowance
+    expect(g.byId.get('p1')!.x - 1500).toBeLessThanOrEqual((31 + INPUT_BURST) * BASE_SPEED * DT + 0.01);
     // bogus input values are ignored
     h.act('p1', { t: 'input', seq: 500, dx: 5, dy: 0 });
     expect(g.byId.get('p1')!.inputs.some((i) => i.seq === 500)).toBe(false);

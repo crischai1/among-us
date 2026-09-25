@@ -7,7 +7,7 @@ export interface Input {
   dy: number;
 }
 
-export interface SPlayer {
+export interface SPlayer extends InputQueue {
   id: string;
   name: string;
   color: number;
@@ -59,13 +59,33 @@ export interface Meeting {
   results: VoteResults | null;
 }
 
-/** Take this tick's inputs: one normally, two when the client is catching up. */
-export function takeInputs(p: { inputs: Input[] }): Input[] {
-  const n = p.inputs.length > 3 ? 2 : 1;
-  return p.inputs.splice(0, n);
+/** Inputs held while a laggy connection catches up (2 s at 30 Hz). */
+export const MAX_QUEUED_INPUTS = 60;
+/** Extra ticks of movement a player may bank to catch up after a network stall. */
+export const INPUT_BURST = 20;
+/** Fastest catch-up rate: inputs applied in one tick. */
+export const MAX_INPUTS_PER_TICK = 3;
+
+export interface InputQueue {
+  inputs: Input[];
+  lastSeq: number;
+  /** Token bucket: +1 per tick, capped at INPUT_BURST; each applied input costs 1. */
+  inputBudget: number;
 }
 
-export const MAX_QUEUED_INPUTS = 8;
+/**
+ * Take this tick's inputs. Normally one; after a stall (bursty wifi) up to
+ * MAX_INPUTS_PER_TICK so the backlog drains without dropping anything. The
+ * budget means total movement can never exceed real time plus INPUT_BURST
+ * ticks, so sending extra inputs doesn't make anyone faster.
+ */
+export function takeInputs(p: InputQueue): Input[] {
+  p.inputBudget = Math.min(INPUT_BURST, p.inputBudget + 1);
+  const want = p.inputs.length > 2 ? MAX_INPUTS_PER_TICK : 1;
+  const n = Math.min(p.inputs.length, want, Math.floor(p.inputBudget));
+  p.inputBudget -= n;
+  return p.inputs.splice(0, n);
+}
 
 /** Validate and enqueue an input. Returns false if rejected. */
 export function queueInput(p: { inputs: Input[]; lastSeq: number }, seq: unknown, dx: unknown, dy: unknown): boolean {

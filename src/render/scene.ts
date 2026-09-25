@@ -16,7 +16,7 @@ export interface SceneOpts {
   t: number;
   roster: Look[];
   /** Our own avatar, or null (cameras). */
-  self: { x: number; y: number; look: Look; flags: number; facing: 1 | -1; walk: number; moving: boolean; red: boolean } | null;
+  self: { x: number; y: number; look: Look; flags: number; facing: 1 | -1; walk: number; amp: number; red: boolean } | null;
   /** Show ghosts (viewer is dead) */
   ghostView: boolean;
   /** Filter for whether a point is visible to the viewer. */
@@ -72,7 +72,7 @@ export function drawSceneEntities(ctx: CanvasRenderingContext2D, o: SceneOpts): 
       draw: () => {
         ctx.save();
         ctx.globalAlpha = a;
-        drawCrewmate(ctx, e.x, e.y, color, { facing: e.facing, walk: e.walk, moving: e.moving, ghost });
+        drawCrewmate(ctx, e.x, e.y, color, { facing: e.facing, walk: e.walk, amp: e.amp, ghost });
         if (scanning) drawScan(ctx, e.x, e.y, o.t);
         ctx.restore();
       },
@@ -84,7 +84,7 @@ export function drawSceneEntities(ctx: CanvasRenderingContext2D, o: SceneOpts): 
     const ghost = (s.flags & F_GHOST) !== 0;
     items.push({
       y: s.y,
-      draw: () => drawCrewmate(ctx, s.x, s.y, colorOf(s.look.color), { facing: s.facing, walk: s.walk, moving: s.moving, ghost }),
+      draw: () => drawCrewmate(ctx, s.x, s.y, colorOf(s.look.color), { facing: s.facing, walk: s.walk, amp: s.amp, ghost }),
     });
     if (o.names) tags.push({ x: s.x, y: s.y - 44, name: s.look.name, color: s.red ? '#ff4b4b' : '#ffffff' });
   }

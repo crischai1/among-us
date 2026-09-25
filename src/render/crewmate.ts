@@ -2,8 +2,10 @@ import type { PlayerColor } from '../../shared/colors';
 
 export interface CrewOpts {
   facing?: 1 | -1;
+  /** Walk cycle phase (radians), advanced by distance travelled. */
   walk?: number;
-  moving?: boolean;
+  /** Walk blend 0 (standing) .. 1 (full stride); eases in and out. */
+  amp?: number;
   ghost?: boolean;
   alpha?: number;
   scale?: number;
@@ -22,12 +24,17 @@ function bodyPath(ctx: CanvasRenderingContext2D, bottom = -8): void {
   ctx.closePath();
 }
 
-function leg(ctx: CanvasRenderingContext2D, x: number, lift: number, fill: string): void {
+function leg(ctx: CanvasRenderingContext2D, x: number, lift: number, fill: string, swing = 0): void {
+  // Pivot at the hip so the leg swings rather than slides.
+  ctx.save();
+  ctx.translate(x + 5, -9 - lift);
+  ctx.rotate(swing);
   ctx.beginPath();
-  ctx.roundRect(x, -12 - lift, 10, 12, [0, 0, 4, 4]);
+  ctx.roundRect(-5, -3, 10, 12, [2, 2, 4.5, 4.5]);
   ctx.fillStyle = fill;
   ctx.fill();
   ctx.stroke();
+  ctx.restore();
 }
 
 function visor(ctx: CanvasRenderingContext2D): void {
@@ -86,14 +93,38 @@ export function drawCrewmate(ctx: CanvasRenderingContext2D, x: number, y: number
     return;
   }
 
-  const phase = o.moving ? o.walk ?? 0 : 0;
-  const a = o.moving ? Math.sin(phase) * 4 : 0;
+  const amp = o.amp ?? 0;
+  const p = o.walk ?? 0;
+  const sn = Math.sin(p);
+  const cs = Math.cos(p);
+  // Front leg is ahead when sin > 0 and swinging forward (in the air) when cos > 0.
+  const stride = sn * 5.5 * amp;
+  const frontLift = Math.max(0, cs) * 3.8 * amp;
+  const backLift = Math.max(0, -cs) * 3.8 * amp;
+  // Body is highest as the legs pass each other, lowest at full stride.
+  const bob = -(1 - Math.abs(sn)) * 2.2 * amp;
+  const lean = 0.09 * amp;
+  const stretch = (1 - Math.abs(sn)) * 0.035 * amp;
+  const breathe = (1 - amp) * Math.sin(performance.now() / 650) * 0.015;
+  const packSway = -Math.sin(p * 2 + 0.6) * 0.9 * amp;
+
+  // ground shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.22)';
+  ctx.beginPath();
+  ctx.ellipse(1, 0, 14 - amp * Math.abs(sn) * 1.5, 3.8, 0, 0, Math.PI * 2);
+  ctx.fill();
 
   // back leg
-  leg(ctx, -9 + a * 0.5, Math.max(0, a), color.shadow);
+  leg(ctx, -9 - stride * 0.45, backLift, color.shadow, stride * 0.06);
+
+  ctx.save();
+  ctx.translate(0, bob - 8);
+  ctx.rotate(lean);
+  ctx.scale(1, 1 + stretch + breathe);
+  ctx.translate(0, 8);
   // backpack
   ctx.beginPath();
-  ctx.roundRect(-17, -31, 9, 19, 3);
+  ctx.roundRect(-17 + packSway, -31, 9, 19, 3);
   ctx.fillStyle = color.shadow;
   ctx.fill();
   ctx.stroke();
@@ -110,9 +141,11 @@ export function drawCrewmate(ctx: CanvasRenderingContext2D, x: number, y: number
   ctx.restore();
   bodyPath(ctx);
   ctx.stroke();
-  // front leg
-  leg(ctx, 3 - a * 0.5, Math.max(0, -a), color.body);
   visor(ctx);
+  ctx.restore();
+
+  // front leg (drawn over the body's lower edge)
+  leg(ctx, 3 + stride * 0.45, frontLift, color.body, -stride * 0.06);
   ctx.restore();
 }
 

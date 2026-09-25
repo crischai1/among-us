@@ -14,14 +14,24 @@ const MIME: Record<string, string> = {
   '.txt': 'text/plain; charset=utf-8',
 };
 
-/** Static file server for the built client, with SPA fallback and a health check. */
-export function createHttpServer(distDir: string) {
+/**
+ * Static file server for the built client, with SPA fallback and a health check.
+ * With `devClientPort`, page requests redirect to the Vite dev server instead of
+ * serving a possibly stale build from dist/.
+ */
+export function createHttpServer(distDir: string, devClientPort?: number) {
   const root = resolve(distDir);
   return createServer((req: IncomingMessage, res: ServerResponse) => {
     const url = new URL(req.url ?? '/', 'http://x');
     if (url.pathname === '/healthz') {
       res.writeHead(200, { 'content-type': 'text/plain' });
       res.end('ok');
+      return;
+    }
+    if (devClientPort) {
+      const host = (req.headers.host ?? 'localhost').replace(/:\d+$/, '');
+      res.writeHead(302, { location: `http://${host}:${devClientPort}${url.pathname}${url.search}` });
+      res.end();
       return;
     }
     if (req.method !== 'GET' && req.method !== 'HEAD') {

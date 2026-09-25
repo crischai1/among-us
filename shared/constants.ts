@@ -44,7 +44,7 @@ export const SABOTAGE_AFTER_MEETING_MS = 10_000;
 export const DOOR_CLOSE_MS = 10_000;
 export const DOOR_COOLDOWN_MS = 30_000;
 export const REACTOR_MS = 45_000;
-export const O2_MS = 30_000;
+export const O2_MS = 50_000;
 
 export const LOBBY_GRACE_MS = 10_000;
 export const GAME_GRACE_MS = 45_000;

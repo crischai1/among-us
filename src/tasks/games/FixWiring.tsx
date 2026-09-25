@@ -1,7 +1,22 @@
 import { useMemo, useRef, useState } from 'react';
 import { seeded, svgPoint, type TaskGameProps } from '../types';
 
-const WIRE_COLORS = ['#ff2d2d', '#2d6bff', '#ffe135', '#ff3dd8'];
+// Okabe–Ito colorblind-safe palette, plus a unique shape per wire so color is never the only cue.
+const WIRE_COLORS = ['#d55e00', '#0072b2', '#f0e442', '#cc79a7'];
+
+function WireSymbol({ kind, x, y }: { kind: number; x: number; y: number }) {
+  const common = { fill: '#fff', stroke: '#000', strokeWidth: 2.5, strokeLinejoin: 'round' as const };
+  switch (kind) {
+    case 0:
+      return <circle cx={x} cy={y} r={7} {...common} />;
+    case 1:
+      return <polygon points={`${x},${y - 8} ${x + 8},${y + 6} ${x - 8},${y + 6}`} {...common} />;
+    case 2:
+      return <rect x={x - 6.5} y={y - 6.5} width={13} height={13} {...common} />;
+    default:
+      return <polygon points={`${x},${y - 9} ${x + 8},${y} ${x},${y + 9} ${x - 8},${y}`} {...common} />;
+  }
+}
 
 export function FixWiring({ params, step, onComplete }: TaskGameProps) {
   const [left, right] = useMemo(() => {
@@ -42,16 +57,18 @@ export function FixWiring({ params, step, onComplete }: TaskGameProps) {
       {drag && <line x1={42} y1={ly(left.indexOf(drag.color))} x2={drag.x} y2={drag.y} stroke={WIRE_COLORS[drag.color]} strokeWidth={14} strokeLinecap="round" />}
       {left.map((c, i) => (
         <g key={`l${c}`} onPointerDown={(e) => !done.includes(c) && setDrag({ color: c, ...svgPoint(svgRef.current!, e) })} style={{ cursor: 'grab' }}>
-          <rect x={0} y={ly(i) - 12} width={30} height={24} fill={WIRE_COLORS[c]} stroke="#000" strokeWidth={2} />
-          <rect x={30} y={ly(i) - 9} width={14} height={18} fill="#c9a04a" stroke="#000" strokeWidth={2} />
-          <circle cx={36} cy={ly(i)} r={20} fill="transparent" />
+          <rect x={0} y={ly(i) - 15} width={32} height={30} fill={WIRE_COLORS[c]} stroke="#000" strokeWidth={2} />
+          <rect x={32} y={ly(i) - 9} width={12} height={18} fill="#c9a04a" stroke="#000" strokeWidth={2} />
+          <WireSymbol kind={c} x={16} y={ly(i)} />
+          <circle cx={30} cy={ly(i)} r={24} fill="transparent" />
         </g>
       ))}
       {right.map((c, i) => (
         <g key={`r${c}`}>
-          <rect x={356} y={ly(i) - 9} width={14} height={18} fill="#c9a04a" stroke="#000" strokeWidth={2} />
-          <rect x={370} y={ly(i) - 12} width={30} height={24} fill={WIRE_COLORS[c]} stroke="#000" strokeWidth={2} />
-          <circle cx={380} cy={ly(i) - 22} r={5} fill={done.includes(c) ? '#ffe135' : '#444'} />
+          <rect x={356} y={ly(i) - 9} width={12} height={18} fill="#c9a04a" stroke="#000" strokeWidth={2} />
+          <rect x={368} y={ly(i) - 15} width={32} height={30} fill={WIRE_COLORS[c]} stroke="#000" strokeWidth={2} />
+          <WireSymbol kind={c} x={384} y={ly(i)} />
+          <circle cx={346} cy={ly(i) - 20} r={5} fill={done.includes(c) ? '#3dff6a' : '#444'} stroke="#000" strokeWidth={1.5} />
         </g>
       ))}
     </svg>
