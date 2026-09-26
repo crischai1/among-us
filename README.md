@@ -4,9 +4,23 @@ A browser-based Among Us clone with real-time online multiplayer. Everything is 
 
 - **Online rooms:** 6-letter room codes and invite links (`?room=CODE`), up to 15 players, up to 3 impostors.
 - **Roles:** Crewmate and Impostor, plus optional Engineer (vents), Scientist (portable vitals) and Shapeshifter.
-- **Map:** The Skeld, with 14 rooms, hallways, doors, 4 vent networks, 4 security cameras, and admin and vitals consoles. The map file (`shared/map/skeld.ts`) lists its sabotages and task recipes (one station pool per task step) alongside the layout.
-- **Tasks:** 12 mini-games — Fix Wiring, Swipe Card, Calibrate Distributor, Divert Power, Download/Upload Data, Align Engine, Stabilize Steering, Fuel Engines, Clear Asteroids, Empty Garbage, Submit Scan and Start Reactor.
-- **Sabotage:** Lights, Reactor, O2, Comms, and Doors.
+- **Maps** (the host picks one in Settings):
+  - **The Skeld:** 14 rooms, hallways, doors, 4 vent networks, 4 security cameras, and admin and vitals consoles.
+  - **MIRA HQ:** traced from the original's layout: Launchpad, Locker Room, Decontamination, Reactor, Laboratory, the Y-shaped hallway, Office, Admin, the domed Greenhouse, Communications, MedBay, Storage, Cafeteria and Balcony, floating in open sky. Its gimmicks:
+    - all 11 vents form one network;
+    - no cameras and no doors to lock; instead a **door log** in Communications records who passes the north, southwest and southeast sensors of the Y hallway (last 20 entries, 5 s per player per sensor);
+    - **decontamination**: walking into the chamber shuts both doors for 3 seconds while it's sprayed;
+    - comms is fixed by typing a code that changes every 10 seconds, at both the Communications and Office keypads;
+    - you start on the Launchpad and meet in the Cafeteria.
+  - **Polus:** traced from the original: buildings spread over an open snowfield on a rocky planet, a lava pit, the Dropship with a seismic stabilizer tower either side, and the octagonal Specimen Room behind two decontamination corridors. Its gimmicks:
+    - sabotaged doors (Electrical, O2, Communications, Weapons, Storage, Office, Laboratory) stay shut until a living player opens each one by flipping its switches;
+    - **Seismic Stabilizers** replaces the reactor: hold both tower panels within 60 seconds;
+    - 6 security cameras, vitals in the Office, and an admin map that ignores anyone out in the snow;
+    - 4 vent networks; you start in the Dropship and meet around the Office table.
+  - The admin table can be used from any side of it, on every map.
+  - Each map file (`shared/map/skeld.ts`, `shared/map/mira.ts`, `shared/map/polus.ts`) lists its sabotages and task recipes (one station pool per task step) alongside the layout.
+- **Tasks:** 37 mini-games. The Skeld: Fix Wiring, Swipe Card, Calibrate Distributor, Divert Power, Download/Upload Data, Align Engine, Stabilize Steering, Fuel Engines, Clear Asteroids, Empty Garbage, Submit Scan and Start Reactor. MIRA HQ adds Enter ID Code, Run Diagnostics (start it, come back a minute later), Water Plants, Buy Beverage, Measure Weather, Sort Samples, Assemble Artifact, Process Data, Unlock Manifolds, Clean O2 Filter, Prime Shields and Chart Course. Polus adds Insert Keys, Scan Boarding Pass, Align Telescope, Fill Canisters, Fix Weather Node, Monitor Tree, Open Waterways, Reboot Wifi, Record Temperature, Repair Drill, Replace Water Jug, Store Artifacts and Inspect Sample (Reboot Wifi and Inspect Sample make you come back after a minute).
+- **Sabotage:** Lights, Reactor (Seismic Stabilizers on Polus), O2, Comms, and Doors (The Skeld and Polus).
 - **Meetings:** emergency button and body reports, discussion and voting timers, meeting chat and ghost-only chat, skip votes, anonymous votes, confirm ejects.
 - **Cutscenes:** role reveal, meeting splash, kill animation, ejection, and victory/defeat.
 - **Settings:** the host controls the full lobby settings panel.
@@ -65,8 +79,8 @@ npm test
 npm run typecheck
 ```
 
-- **`tests/shared`:** map integrity (every room and station reachable, doors valid, vent links symmetric), deterministic movement and collision, visibility, voting, win conditions, roles, task assignment, sabotage.
-- **`tests/server`:** a full scripted game with a fake clock. Anti-cheat checks: input flooding, out-of-range and through-wall kills, early task completion, invalid vent moves, and no leaks of roles, ghosts, distant players or votes. Network tests use real WebSocket clients, including reconnect.
+- **`tests/shared`:** map integrity for every map (shutting a room's doors seals it, the admin table is reachable from all sides, every room and station reachable, pieces don't overlap, doors valid, vent links symmetric, MIRA HQ's single vent network, decon and sensors), deterministic movement and collision, visibility, voting, win conditions, roles, task assignment, sabotage.
+- **`tests/server`:** a full scripted game with a fake clock. Anti-cheat checks: input flooding, out-of-range and through-wall kills, early task completion, invalid vent moves, and no leaks of roles, ghosts, distant players or votes. Network tests use real WebSocket clients, including reconnect. MIRA HQ tests cover the Launchpad start, decontamination, the door log, keypad comms and the Run Diagnostics wait; Polus tests cover manual doors, the seismic stabilizers, Reboot Wifi's wait and the admin map.
 - **`tests/ui`:** every mini-game renders; the settings panel is read-only for non-hosts.
 
 ## Deploying
@@ -91,7 +105,7 @@ Rooms live in memory, so **run exactly one instance**.
 
 - **`shared/`** is TypeScript used by both client and server.
   - Movement (`sim/movement.ts`) is a fixed-step, deterministic function.
-  - Map compiler (`map/compile.ts`) turns room and hall rectangles into wall segments and a spatial hash.
+  - Map compiler (`map/compile.ts`) turns room and hall rectangles and polygons (MIRA HQ's diagonal hallway and domed Greenhouse, Polus' octagonal Specimen Room) into exact wall segments and a spatial hash.
   - Visibility polygons (`sim/visibility.ts`).
   - Game rules (`rules/`).
 - **`server/`** is authoritative and runs at 30 Hz.

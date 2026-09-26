@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { SKELD } from '../../shared/map/skeld';
+import { MAPS } from '../../shared/map';
 import type { MapDef } from '../../shared/map/types';
-import { pointInRect } from '../../shared/geom';
+import { pointInPolygon, pointInRect } from '../../shared/geom';
+import type { MapId } from '../../shared/settings';
 import { CrewmateSvg } from './CrewmateSvg';
 import { markScale, roomCenter, ShipSvg } from './MapOverlay';
 
@@ -37,10 +38,13 @@ const list = (xs: string[]) => (xs.length ? xs.join(', ') : 'None');
 
 function MapFacts({ def }: { def: MapDef }) {
   const networks = ventNetworks(def);
-  const consoles = (kind: 'cams' | 'admin' | 'vitals') =>
+  const consoles = (kind: 'cams' | 'admin' | 'vitals' | 'doorlog') =>
     list(unique(def.stations.filter((s) => s.kind === kind).map((s) => roomName(def, s.room))));
   const button = def.button;
-  const buttonRoom = button ? def.rooms.find((r) => r.rects.some((rc) => pointInRect(button.x, button.y, rc))) : null;
+  const buttonRoom = button
+    ? def.rooms.find((r) => r.rects.some((rc) => pointInRect(button.x, button.y, rc)) || r.polys?.some((p) => pointInPolygon(button.x, button.y, p)))
+    : null;
+  const lockable = def.doors.filter((d) => !d.auto);
   return (
     <dl className="help-facts">
       <dt>Emergency button</dt>
@@ -52,12 +56,26 @@ function MapFacts({ def }: { def: MapDef }) {
             {s.icon} {s.label} <small>({roomName(def, s.room)})</small>
           </span>
         ))}
-        {def.doors.length > 0 && <span className="help-chip">🚪 Doors</span>}
+        {lockable.length > 0 && <span className="help-chip">🚪 Doors</span>}
       </dd>
       <dt>Doors</dt>
-      <dd>{def.doors.length ? list(unique(def.doors.map((d) => roomName(def, d.room)))) : 'None: impostors can’t lock rooms here'}</dd>
+      <dd>{lockable.length ? list(unique(lockable.map((d) => roomName(def, d.room)))) : 'None: impostors can’t lock rooms here'}</dd>
       <dt>Cameras</dt>
       <dd>{def.cameras.length ? `${consoles('cams')} (${def.cameras.length} views)` : 'None'}</dd>
+      {!!def.sensors?.length && (
+        <>
+          <dt>Door log</dt>
+          <dd>
+            {consoles('doorlog')}: logs who passes the {def.sensors.map((s) => s.name.toLowerCase()).join(', ')} sensors
+          </dd>
+        </>
+      )}
+      {!!def.decon?.length && (
+        <>
+          <dt>Decontamination</dt>
+          <dd>Walking in shuts both doors for a few seconds while the room is sprayed</dd>
+        </>
+      )}
       <dt>Admin map</dt>
       <dd>{consoles('admin')}</dd>
       <dt>Vitals</dt>
@@ -89,6 +107,14 @@ function MapPreview({ def }: { def: MapDef }) {
         <rect key={v.id} x={v.x - 22 * k} y={v.y - 14 * k} width={44 * k} height={28 * k} rx={6 * k} fill={color.get(v.id)} className="help-vent" strokeWidth={5 * k} />
       ))}
       {def.button && <circle cx={def.button.x} cy={def.button.y} r={24 * k} className="help-button" strokeWidth={7 * k} />}
+      {def.sensors?.map((s) => (
+        <line key={s.id} x1={s.seg.x1} y1={s.seg.y1} x2={s.seg.x2} y2={s.seg.y2} className="help-sensor" strokeWidth={10 * k} />
+      ))}
+      {def.doors
+        .filter((d) => d.auto)
+        .map((d) => (
+          <line key={d.id} x1={d.seg.x1} y1={d.seg.y1} x2={d.seg.x2} y2={d.seg.y2} className="help-decon" strokeWidth={12 * k} />
+        ))}
       {def.sabotages.map((s) => {
         const c = roomCenter(s.room, def);
         return (
@@ -102,14 +128,23 @@ function MapPreview({ def }: { def: MapDef }) {
 }
 
 function MapTab() {
+  const [id, setId] = useState<MapId>('skeld');
+  const def = MAPS[id];
   return (
     <div className="help-maps">
+      <div className="help-map-pick" role="tablist" aria-label="Maps">
+        {(Object.keys(MAPS) as MapId[]).map((m) => (
+          <button key={m} role="tab" aria-selected={m === id} className={`btn small ${m === id ? 'blue' : ''}`} onClick={() => setId(m)}>
+            {MAPS[m].name}
+          </button>
+        ))}
+      </div>
       <p className="help-blurb">
-        <b>{SKELD.name}</b>: the spaceship. Compact and full of doors, with Security cameras watching the main corridors.
+        <b>{def.name}</b>: {def.blurb}
       </p>
       <div className="help-map-body">
         <div className="help-map-view map-panel">
-          <MapPreview def={SKELD} />
+          <MapPreview def={def} />
           <div className="help-legend">
             <span>
               <i className="dot button" /> Emergency button
@@ -118,9 +153,19 @@ function MapTab() {
               <i className="dot vent" /> Vents (same colour = connected)
             </span>
             <span>💡 ☢ Sabotage rooms</span>
+            {!!def.sensors?.length && (
+              <span>
+                <i className="dot sensor" /> Door-log sensors
+              </span>
+            )}
+            {!!def.decon?.length && (
+              <span>
+                <i className="dot decon" /> Decontamination doors
+              </span>
+            )}
           </div>
         </div>
-        <MapFacts def={SKELD} />
+        <MapFacts def={def} />
       </div>
     </div>
   );
@@ -181,16 +226,16 @@ function RulesTab() {
             <b>💡 Lights</b>: crew vision shrinks. Flip every switch on the light panel to fix.
           </li>
           <li>
-            <b>📡 Comms</b>: hides task lists and knocks out cameras and admin. Tune the radio to fix.
+            <b>📡 Comms</b>: hides task lists and knocks out cameras, admin and the door log. Tune the radio to fix (on MIRA HQ, type the code shown at both keypads).
           </li>
           <li>
-            <b>☢ Reactor</b>: a countdown! Two players must hold the two panels at the same time.
+            <b>☢ Reactor</b> (Seismic Stabilizers on Polus): a countdown! Two players must hold the two panels at the same time.
           </li>
           <li>
             <b>🫧 Oxygen</b>: a countdown! Enter the code at both keypads.
           </li>
           <li>
-            <b>🚪 Doors</b>: lock every door of a room for a few seconds.
+            <b>🚪 Doors</b>: lock every door of a room for a few seconds. On Polus they stay locked until a crewmate flips the door’s switches.
           </li>
         </ul>
       </section>

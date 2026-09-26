@@ -1,4 +1,4 @@
-import type { CompiledMap } from '../../shared/map';
+import { roomLabel, type CompiledMap } from '../../shared/map';
 
 export const debugEnabled = typeof location !== 'undefined' && new URLSearchParams(location.search).has('debug');
 export const debugState = { noFog: false, mouse: { x: 0, y: 0 } };
@@ -17,10 +17,10 @@ export function drawDebug(ctx: CanvasRenderingContext2D, map: CompiledMap, _t: n
   ctx.font = '12px monospace';
   ctx.fillStyle = '#ff0';
   for (const r of map.def.rooms) {
-    const rc = r.rects[0];
     ctx.strokeStyle = 'rgba(255,255,0,0.5)';
-    ctx.strokeRect(rc.x, rc.y, rc.w, rc.h);
-    ctx.fillText(r.id, rc.x + 6, rc.y + 16);
+    for (const rc of r.rects) ctx.strokeRect(rc.x, rc.y, rc.w, rc.h);
+    const c = roomLabel(r);
+    ctx.fillText(r.id, c.x, c.y);
   }
   ctx.strokeStyle = 'rgba(255,80,80,0.9)';
   ctx.setLineDash([6, 6]);

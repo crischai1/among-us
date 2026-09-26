@@ -19,7 +19,7 @@ const priv = (stationId: string, type: 'swipe' | 'divert' = 'divert'): PrivState
   ({
     role: 'crewmate', team: [], commsDown: false, killReadyAt: 0, emergencyLeft: 1, venting: null, ventReadyAt: 0, ventEndsAt: null,
     sabotageReadyAt: 0, doorReadyAt: {}, openStation: stationId, console: null, admin: null, vitals: null, battery: null, shift: null,
-    o2Code: null, vote: null,
+    o2Code: null, commsCode: null, doorLog: null, vote: null,
     tasks: [{ id: 't1', type, category: 'short', name: 'T', step: 1, steps: 2, stationId, room: 'O2', done: false, params: { seed: 1, target: 'o2' } }],
   }) as PrivState;
 

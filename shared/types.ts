@@ -19,12 +19,18 @@ export type MeetingStage = 'intro' | 'discussion' | 'voting' | 'results';
 export type TaskType =
   | 'wires' | 'swipe'
   | 'calibrate' | 'divert' | 'transfer' | 'align' | 'steering'
-  | 'fuel' | 'asteroids' | 'garbage' | 'scan' | 'simon';
+  | 'fuel' | 'asteroids' | 'garbage' | 'scan' | 'simon'
+  // MIRA HQ
+  | 'idcode' | 'diagnostics' | 'water' | 'beverage' | 'weather' | 'samples'
+  | 'artifact' | 'process' | 'manifolds' | 'filter' | 'shields' | 'chart'
+  // Polus
+  | 'keys' | 'boarding' | 'telescope' | 'canisters' | 'node' | 'tree' | 'waterways'
+  | 'wifi' | 'temperature' | 'drill' | 'jug' | 'artifacts' | 'sample';
 export type TaskCategory = 'common' | 'short' | 'long';
 
 export type SabotageKind = 'lights' | 'reactor' | 'o2' | 'comms';
 export const CRITICAL_SABOTAGES: readonly SabotageKind[] = ['reactor', 'o2'];
-export type ConsoleKind = 'cams' | 'admin' | 'vitals';
+export type ConsoleKind = 'cams' | 'admin' | 'vitals' | 'doorlog';
 
 export type Winner = 'crew' | 'impostors';
 export type WinReason = 'tasks' | 'vote' | 'kills' | 'sabotage' | 'disconnect' | 'dev';
@@ -90,8 +96,17 @@ export interface SabotageState {
   lights: boolean[] | null;
   /** Reactor hand-scanner station ids currently held. */
   reactorHeld: string[];
-  /** O2 keypad station ids completed. */
-  o2Done: string[];
+  /** Keypad station ids completed (O2, and comms on maps with comms keypads). */
+  panelsDone: string[];
+  /** Comms is fixed by typing a code at every station rather than tuning one dial. */
+  keypad?: boolean;
+}
+
+/** One door-log line: someone walked through a sensor. */
+export interface DoorLogEntry {
+  color: number;
+  sensor: string;
+  at: number;
 }
 
 export interface EjectionInfo {
@@ -163,6 +178,10 @@ export interface PrivState {
   battery: { leftMs: number; readyAt: number; open: boolean } | null;
   shift: { as: string | null; endsAt: number; readyAt: number } | null;
   o2Code: string | null;
+  /** Comms keypad code at the open station, and when it changes. */
+  commsCode: { code: string; until: number } | null;
+  /** Door log, newest first (only while the console is open). */
+  doorLog: DoorLogEntry[] | null;
   vote: string | null;
 }
 

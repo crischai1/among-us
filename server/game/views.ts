@@ -1,6 +1,7 @@
 import { RELEVANCE_MULT } from '../../shared/constants';
 import { dist2, pointInRect } from '../../shared/geom';
 import type { SnapMessage } from '../../shared/protocol';
+import { COMMS_CODE_MS, commsCode } from '../../shared/rules/sabotage';
 import { taskView } from '../../shared/rules/tasks';
 import {
   F_DISCONNECTED, F_GHOST, F_SCANNING, F_TEAMMATE, type BodyTuple, type EntTuple, type PrivState, type PubState, type VitalsEntry,
@@ -59,11 +60,19 @@ function adminCounts(g: Game): Record<string, number> {
   const counts: Record<string, number> = {};
   const add = (x: number, y: number) => {
     const room = g.map.roomAt(x, y);
-    if (room) counts[room] = (counts[room] ?? 0) + 1;
+    // Like the original, the admin map doesn't track anyone out in the open.
+    if (room && !g.map.rooms.get(room)?.outdoor) counts[room] = (counts[room] ?? 0) + 1;
   };
   for (const p of g.players) if (!p.removed && p.alive && !p.venting) add(p.x, p.y);
   for (const b of g.bodies) add(b.x, b.y);
   return counts;
+}
+
+function commsCodeView(g: Game, p: SPlayer): PrivState['commsCode'] {
+  const s = g.sabotage;
+  if (!s?.keypad || !p.openStation || !s.stations.includes(p.openStation.id)) return null;
+  const win = Math.floor(g.now / COMMS_CODE_MS);
+  return { code: commsCode(g.commsSeed, p.openStation.id, win), until: (win + 1) * COMMS_CODE_MS };
 }
 
 export function buildPriv(g: Game, p: SPlayer): PrivState {
@@ -88,6 +97,8 @@ export function buildPriv(g: Game, p: SPlayer): PrivState {
     battery: p.battery ? { ...p.battery } : null,
     shift: p.shift ? { ...p.shift } : null,
     o2Code: g.sabotage?.kind === 'o2' && p.openStation && g.sabotage.stations.includes(p.openStation.id) ? g.o2Code : null,
+    commsCode: commsCodeView(g, p),
+    doorLog: p.console === 'doorlog' && !g.commsDown ? g.doorLog.map((e) => ({ ...e })) : null,
     vote: p.vote,
   };
 }

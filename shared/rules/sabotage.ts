@@ -34,13 +34,32 @@ export function newSabotage(def: SabotageDef, now: number, rng: Rng): SabotageSt
   }
   const ms = def.ms ?? (kind === 'reactor' ? REACTOR_MS : kind === 'o2' ? O2_MS : 0);
   const endsAt = kind === 'reactor' || kind === 'o2' ? now + ms : null;
-  return { kind, label: def.label, stations: [...def.stations], startedAt: now, endsAt, lights, reactorHeld: [], o2Done: [] };
+  return {
+    kind, label: def.label, stations: [...def.stations], startedAt: now, endsAt, lights, reactorHeld: [], panelsDone: [],
+    ...(kind === 'comms' && def.keypad ? { keypad: true } : {}),
+  };
 }
 
 export function makeO2Code(rng: Rng): string {
   let s = '';
   for (let i = 0; i < 5; i++) s += Math.floor(rng() * 10);
   return s;
+}
+
+/** Keypad comms: each station shows a new code this often. */
+export const COMMS_CODE_MS = 10_000;
+
+/**
+ * The code a keypad comms station shows during time window `win`
+ * (floor(time / COMMS_CODE_MS)). Deterministic, so the server can check it.
+ */
+export function commsCode(seed: number, stationId: string, win: number): string {
+  let h = (seed ^ Math.imul(win + 1, 0x9e3779b1)) >>> 0;
+  for (let i = 0; i < stationId.length; i++) h = Math.imul(h ^ stationId.charCodeAt(i), 0x01000193) >>> 0;
+  h ^= h >>> 15;
+  h = Math.imul(h, 0x2c1b3c6d) >>> 0;
+  h ^= h >>> 12;
+  return String(h % 100000).padStart(5, '0');
 }
 
 /**
@@ -52,7 +71,7 @@ export function applyFix(
   s: SabotageState,
   stationId: string,
   data: number | boolean | string,
-  ctx: { o2Code: string; held?: string[] },
+  ctx: { o2Code: string; held?: string[]; commsCodes?: string[] },
 ): boolean {
   if (!s.stations.includes(stationId)) return false;
   switch (s.kind) {
@@ -65,9 +84,11 @@ export function applyFix(
       s.reactorHeld = ctx.held ?? s.reactorHeld;
       return s.stations.every((id) => s.reactorHeld.includes(id));
     case 'o2':
-      if (data === ctx.o2Code && !s.o2Done.includes(stationId)) s.o2Done.push(stationId);
-      return s.stations.every((id) => s.o2Done.includes(id));
+      if (data === ctx.o2Code && !s.panelsDone.includes(stationId)) s.panelsDone.push(stationId);
+      return s.stations.every((id) => s.panelsDone.includes(id));
     case 'comms':
-      return data === 'tuned';
+      if (!s.keypad) return data === 'tuned';
+      if (typeof data === 'string' && ctx.commsCodes?.includes(data) && !s.panelsDone.includes(stationId)) s.panelsDone.push(stationId);
+      return s.stations.every((id) => s.panelsDone.includes(id));
   }
 }

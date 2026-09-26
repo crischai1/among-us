@@ -42,6 +42,13 @@ export interface SPlayer extends InputQueue {
   vote: string | null;
   lastChatAt: number;
   noclip: boolean;
+  /** Position at the start of the current tick (door-log sensors). */
+  prevX: number;
+  prevY: number;
+  /** Decontamination room the player has been sprayed in and not yet left. */
+  deconDone: string | null;
+  /** sensor id -> last time this player tripped it. */
+  sensorAt: Record<string, number>;
 }
 
 export interface Body {

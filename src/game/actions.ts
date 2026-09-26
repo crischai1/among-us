@@ -1,4 +1,4 @@
-import { isImpostorRole } from '../../shared/types';
+import { isImpostorRole, type ConsoleKind } from '../../shared/types';
 import { serverNow } from '../net/clock';
 import { send } from '../net/session';
 import { useGame, type Overlay } from '../store/game';
@@ -59,13 +59,16 @@ export function doUse(): void {
       openOverlay({ kind: 'fix', stationId: u.id });
       return;
     case 'console': {
-      const kind = u.id as 'cams' | 'admin' | 'vitals';
+      const kind = u.id as ConsoleKind;
       send({ t: 'console', kind, open: true });
       openOverlay({ kind: 'console', console: kind });
       return;
     }
     case 'button':
       if (canPressButton()) send({ t: 'emergency' });
+      return;
+    case 'door':
+      openOverlay({ kind: 'door', doorId: u.id });
       return;
   }
 }

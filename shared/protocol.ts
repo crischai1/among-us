@@ -21,6 +21,7 @@ export type ClientMessage =
   | { t: 'vent'; action: 'enter' | 'move' | 'exit'; ventId?: string }
   | { t: 'sabotage'; kind: SabotageKind | 'doors'; room?: string }
   | { t: 'fix'; kind: SabotageKind; stationId: string; data: number | boolean | string }
+  | { t: 'openDoor'; doorId: string }
   | { t: 'console'; kind: ConsoleKind; open: boolean }
   | { t: 'portableVitals'; open: boolean }
   | { t: 'shapeshift'; target: string }

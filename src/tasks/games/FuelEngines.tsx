@@ -3,7 +3,8 @@ import { useHold } from './HoldProgress';
 
 export function FuelEngines({ step, onComplete }: TaskGameProps) {
   const { pct, holding, bind } = useHold(2600, onComplete);
-  const engine = step === 1;
+  // Fill the can on even steps, pour it into an engine on odd ones (Polus has two engines).
+  const engine = step % 2 === 1;
   return (
     <div className="fuel">
       <svg className="task-svg" viewBox="0 0 400 300">

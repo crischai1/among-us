@@ -39,7 +39,7 @@ export function SecurityView() {
         <button className="close-x" onClick={closeOverlay}>
           ✕
         </button>
-        <div className="cam-grid">
+        <div className={`cam-grid ${world.map.cameras.length > 4 ? 'many' : ''}`}>
           {world.map.cameras.map((cam, i) => (
             <div key={cam.id} className="cam">
               <canvas ref={(el) => void (refs.current[i] = el)} width={480} height={320} />

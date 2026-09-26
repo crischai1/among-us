@@ -1,13 +1,17 @@
-import { BUTTON_RANGE, KILL_RANGES, REPORT_RANGE, USE_RANGE } from '../../shared/constants';
-import { dist } from '../../shared/geom';
+import { BUTTON_RANGE, DOOR_USE_RANGE, KILL_RANGES, REPORT_RANGE, USE_RANGE } from '../../shared/constants';
+import { dist, segDist } from '../../shared/geom';
+import { stationDistance } from '../../shared/map/build';
+import type { StationDef } from '../../shared/map/types';
+import { taskReady } from '../../shared/rules/tasks';
 import { hasLineOfSight } from '../../shared/sim/visibility';
+import { serverNow } from '../net/clock';
 import { doorSegs } from '../../shared/sim/movement';
 import { canVentRole, F_GHOST, F_TEAMMATE, isImpostorRole } from '../../shared/types';
 import { EMPTY_NEARBY, useGame, type Nearby, type UseTarget } from '../store/game';
 import { useSession } from '../store/session';
 import { world } from './world';
 
-const CONSOLE_LABEL = { cams: 'Security', admin: 'Admin', vitals: 'Vitals' } as const;
+const CONSOLE_LABEL = { cams: 'Security', admin: 'Admin', vitals: 'Vitals', doorlog: 'Door Log' } as const;
 
 /** What the player can interact with right now. */
 export function computeNearby(): Nearby {
@@ -22,6 +26,10 @@ export function computeNearby(): Nearby {
   const consider = (t: UseTarget, x: number, y: number, range = USE_RANGE) => {
     const d = dist(px, py, x, y);
     if (d <= range) use.push({ t, d });
+  };
+  const considerStation = (t: UseTarget, st: StationDef) => {
+    const d = stationDistance(st, px, py);
+    if (d <= USE_RANGE) use.push({ t, d });
   };
 
   if (!room?.inGame) {
@@ -40,26 +48,36 @@ export function computeNearby(): Nearby {
   }
 
   if (!imp) {
+    const now = serverNow();
     for (const t of priv.tasks) {
-      if (t.done) continue;
+      if (t.done || !taskReady(t, now)) continue;
       const st = map.stations.get(t.stationId);
-      if (st) consider({ kind: 'task', id: st.id, label: t.name }, st.x, st.y);
+      if (st) considerStation({ kind: 'task', id: st.id, label: t.name }, st);
     }
   }
   if (alive) {
     if (pub.sabotage) {
       for (const id of pub.sabotage.stations) {
         const st = map.stations.get(id);
-        if (st) consider({ kind: 'fix', id, label: 'Fix' }, st.x, st.y);
+        if (st) considerStation({ kind: 'fix', id, label: 'Fix' }, st);
       }
     }
     for (const st of map.def.stations) {
-      if (st.kind === 'cams' || st.kind === 'admin' || st.kind === 'vitals') {
-        consider({ kind: 'console', id: st.kind, label: CONSOLE_LABEL[st.kind] }, st.x, st.y);
+      if (st.kind === 'cams' || st.kind === 'admin' || st.kind === 'vitals' || st.kind === 'doorlog') {
+        considerStation({ kind: 'console', id: st.kind, label: CONSOLE_LABEL[st.kind] }, st);
       }
     }
     const btn = map.def.button;
     if (btn) consider({ kind: 'button', id: 'button', label: 'Emergency' }, btn.x, btn.y, BUTTON_RANGE);
+    // Polus: a sabotaged door stays shut until someone opens it.
+    if (map.def.manualDoors) {
+      for (const id of world.closedDoors) {
+        const d = map.doors.get(id);
+        if (!d || d.auto) continue;
+        const dd = segDist(px, py, d.seg);
+        if (dd <= DOOR_USE_RANGE) use.push({ t: { kind: 'door', id, label: 'Open Door' }, d: dd });
+      }
+    }
   }
 
   let report: number | null = null;

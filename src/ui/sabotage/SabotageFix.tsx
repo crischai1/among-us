@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { closeOverlay } from '../../game/actions';
 import { send } from '../../net/session';
+import { COMMS_CODE_MS } from '../../../shared/rules/sabotage';
 import { useGame } from '../../store/game';
+import { useNow } from '../GameHud';
 
-function Frame({ title, children, className }: { title: string; children: React.ReactNode; className?: string }) {
+export function Frame({ title, children, className }: { title: string; children: React.ReactNode; className?: string }) {
   return (
     <div className="overlay-backdrop" onClick={closeOverlay}>
       <div className={`panel fix-panel ${className ?? ''}`} onClick={(e) => e.stopPropagation()}>
@@ -22,7 +24,60 @@ export function SabotageFix({ stationId }: { stationId: string }) {
   if (kind === 'lights') return <LightsPanel stationId={stationId} />;
   if (kind === 'reactor') return <ReactorHand stationId={stationId} />;
   if (kind === 'o2') return <O2Keypad stationId={stationId} />;
-  return <CommsDial stationId={stationId} />;
+  return <Comms stationId={stationId} />;
+}
+
+function Comms({ stationId }: { stationId: string }) {
+  const keypad = useGame((s) => !!s.pub?.sabotage?.keypad);
+  return keypad ? <CommsKeypad stationId={stationId} /> : <CommsDial stationId={stationId} />;
+}
+
+/** MIRA HQ comms: type the code the panel shows before it rolls over. Every panel must be done. */
+function CommsKeypad({ stationId }: { stationId: string }) {
+  const code = useGame((s) => s.priv?.commsCode);
+  const done = useGame((s) => s.pub?.sabotage?.panelsDone.includes(stationId));
+  const progress = useGame((s) => (s.pub?.sabotage ? `${s.pub.sabotage.panelsDone.length}/${s.pub.sabotage.stations.length}` : ''));
+  const now = useNow(100);
+  const [entry, setEntry] = useState('');
+  const [bad, setBad] = useState(false);
+  const left = code ? Math.max(0, code.until - now) : 0;
+  const press = (d: string) => {
+    if (done) return;
+    if (d === '⌫') return setEntry(entry.slice(0, -1));
+    if (d === '✓') {
+      send({ t: 'fix', kind: 'comms', stationId, data: entry });
+      if (entry !== code?.code) {
+        setBad(true);
+        setTimeout(() => setBad(false), 500);
+      }
+      setEntry('');
+      return;
+    }
+    if (entry.length < 5) setEntry(entry + d);
+  };
+  return (
+    <Frame title="Comms Sabotaged" className="comms">
+      <div className="comms-keypad">
+        <div className="keypad">
+          <div className={`keypad-screen ${bad ? 'bad' : ''} ${done ? 'ok' : ''}`}>{done ? 'OK' : entry.padEnd(5, '_')}</div>
+          {['1', '2', '3', '4', '5', '6', '7', '8', '9', '⌫', '0', '✓'].map((d) => (
+            <button key={d} className="key" onClick={() => press(d)}>
+              {d}
+            </button>
+          ))}
+        </div>
+        <div className="comms-code">
+          <small>BACKUP CODE</small>
+          <b>{code?.code ?? '·····'}</b>
+          <div className="comms-timer">
+            <span style={{ width: `${(left / COMMS_CODE_MS) * 100}%` }} />
+          </div>
+          <small>new code in {Math.ceil(left / 1000)}s</small>
+        </div>
+      </div>
+      <p className="fix-hint">{done ? `This panel is fixed (${progress}). The other panel still needs its code.` : `Enter the code before it changes. Both panels must be reset (${progress}).`}</p>
+    </Frame>
+  );
 }
 
 function LightsPanel({ stationId }: { stationId: string }) {
@@ -46,6 +101,7 @@ function LightsPanel({ stationId }: { stationId: string }) {
 
 function ReactorHand({ stationId }: { stationId: string }) {
   const held = useGame((s) => s.pub?.sabotage?.reactorHeld) ?? [];
+  const label = useGame((s) => s.pub?.sabotage?.label) ?? 'Reactor Meltdown';
   const [holding, setHolding] = useState(false);
   const set = (v: boolean) => {
     if (v === holding) return;
@@ -54,7 +110,7 @@ function ReactorHand({ stationId }: { stationId: string }) {
   };
   useEffect(() => () => send({ t: 'fix', kind: 'reactor', stationId, data: false }), [stationId]);
   return (
-    <Frame title="Reactor Meltdown" className="reactor">
+    <Frame title={label} className="reactor">
       <div
         className={`hand-pad ${holding ? 'holding' : ''}`}
         onPointerDown={() => set(true)}
@@ -72,7 +128,7 @@ function ReactorHand({ stationId }: { stationId: string }) {
 
 function O2Keypad({ stationId }: { stationId: string }) {
   const code = useGame((s) => s.priv?.o2Code);
-  const done = useGame((s) => s.pub?.sabotage?.o2Done.includes(stationId));
+  const done = useGame((s) => s.pub?.sabotage?.panelsDone.includes(stationId));
   const [entry, setEntry] = useState('');
   const [bad, setBad] = useState(false);
   const press = (d: string) => {

@@ -106,7 +106,7 @@ function onMessage(msg: ServerMessage): void {
         const role = devRoleFromUrl();
         if (role && !session.room) send({ t: 'devRole', role });
       }
-      if (msg.room.inGame) setWorldMap('skeld');
+      if (msg.room.inGame) setWorldMap(msg.room.settings.map ?? 'skeld');
       else {
         setWorldMap('lobby');
         world.speed = 1;

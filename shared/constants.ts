@@ -13,6 +13,8 @@ export const LIGHTS_VISION_FACTOR = 0.25;
 export const LIGHTS_FADE_MS = 1500;
 
 export const USE_RANGE = 60;
+/** Polus doors can be opened from a little further away: they're wide. */
+export const DOOR_USE_RANGE = 80;
 export const BUTTON_RANGE = 105;
 export const REPORT_RANGE = 90;
 export const KILL_RANGES = { short: 60, medium: 90, long: 130 } as const;
@@ -42,9 +44,16 @@ export const INITIAL_KILL_COOLDOWN_MS = 10_000;
 export const SABOTAGE_COOLDOWN_MS = 30_000;
 export const SABOTAGE_AFTER_MEETING_MS = 10_000;
 export const DOOR_CLOSE_MS = 10_000;
+/** Maps with manual doors (Polus): shut until a crewmate opens them, so effectively forever. */
+export const MANUAL_DOOR_MS = 60 * 60_000;
 export const DOOR_COOLDOWN_MS = 30_000;
 export const REACTOR_MS = 45_000;
 export const O2_MS = 50_000;
+/** Decontamination: how long both doors stay shut while the chamber is sprayed. */
+export const DECON_MS = 3_000;
+/** Door log: one entry per player per sensor within this window. */
+export const SENSOR_COOLDOWN_MS = 5_000;
+export const DOOR_LOG_MAX = 20;
 
 export const LOBBY_GRACE_MS = 10_000;
 export const GAME_GRACE_MS = 45_000;

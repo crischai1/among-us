@@ -1,5 +1,7 @@
 import { LIGHTS_FADE_MS, LIGHTS_VISION_FACTOR, TICK_MS, VISION_BASE } from '../../shared/constants';
 import { clamp, dist, lerp } from '../../shared/geom';
+import { stationDistance } from '../../shared/map/build';
+import { taskReady } from '../../shared/rules/tasks';
 import { F_GHOST, isImpostorRole } from '../../shared/types';
 import { doorSegs, stepPlayer } from '../../shared/sim/movement';
 import { computeVisibility, hasLineOfSight } from '../../shared/sim/visibility';
@@ -16,6 +18,7 @@ import { drawHighlight, drawStationMarks, type StationMarks } from './props';
 import { TASK_THEME } from '../tasks/theme';
 import { drawSceneEntities, drawSceneFloor, drawSceneTop, drawTags, type Look } from './scene';
 import { wallsPath } from './mapLayer';
+import { drawRockGround, drawSky } from './sky';
 
 // The running loop keeps references to render functions, so hot-swapping any
 // render module would leave stale drawing code on screen: reload instead.
@@ -24,7 +27,7 @@ if (import.meta.hot) import.meta.hot.accept(() => location.reload());
 /** World units visible vertically. */
 const VIEW_HEIGHT = 720;
 /** Badge icons for consoles, shown like task markers. */
-const CONSOLE_ICON = { cams: '📹', admin: '🗺️', vitals: '💓' } as const;
+const CONSOLE_ICON = { cams: '📹', admin: '🗺️', vitals: '💓', doorlog: '📋' } as const;
 
 export const camera = { x: 0, y: 0, zoom: 1, dpr: 1 };
 
@@ -140,9 +143,15 @@ export function startLoop(canvas: HTMLCanvasElement): () => void {
     const H = canvas.height;
 
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.fillStyle = world.map.def.theme.void;
-    ctx.fillRect(0, 0, W, H);
-    drawStars(ctx, W, H, camera.x, camera.y, k);
+    if (world.map.def.theme.sky) {
+      drawSky(ctx, W, H, camera.x, camera.y, k, t);
+    } else if (world.map.def.theme.rock) {
+      drawRockGround(ctx, W, H, camera.x, camera.y, k);
+    } else {
+      ctx.fillStyle = world.map.def.theme.void;
+      ctx.fillRect(0, 0, W, H);
+      drawStars(ctx, W, H, camera.x, camera.y, k);
+    }
     if (!s.ready) return;
     ctx.setTransform(k, 0, 0, k, W / 2 - camera.x * k, H / 2 - camera.y * k);
 
@@ -168,7 +177,9 @@ export function startLoop(canvas: HTMLCanvasElement): () => void {
 
     const marks: StationMarks = { tasks: new Map(), sabotage: new Set(), consoles: new Map(), inRange: null };
     if (inGame && priv && pub?.phase === 'playing' && !priv.venting) {
-      if (!isImpostorRole(priv.role)) for (const tk of priv.tasks) if (!tk.done) marks.tasks.set(tk.stationId, TASK_THEME[tk.type].icon);
+      if (!isImpostorRole(priv.role)) {
+        for (const tk of priv.tasks) if (!tk.done) marks.tasks.set(tk.stationId, taskReady(tk, now) ? TASK_THEME[tk.type].icon : '⏳');
+      }
       if (!ghost && pub.sabotage) for (const id of pub.sabotage.stations) marks.sabotage.add(id);
       if (!ghost) {
         for (const st of map.def.stations) {
@@ -180,7 +191,7 @@ export function startLoop(canvas: HTMLCanvasElement): () => void {
       if (nearby.use && (nearby.use.kind === 'task' || nearby.use.kind === 'fix')) marks.inRange = nearby.use.id;
       if (nearby.use?.kind === 'console') {
         const kind = nearby.use.id;
-        const st = map.def.stations.filter((x) => x.kind === kind).sort((a, b) => dist(s.x, s.y, a.x, a.y) - dist(s.x, s.y, b.x, b.y))[0];
+        const st = map.def.stations.filter((x) => x.kind === kind).sort((a, b) => stationDistance(a, s.x, s.y) - stationDistance(b, s.x, s.y))[0];
         if (st) marks.inRange = st.id;
       }
     }

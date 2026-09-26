@@ -1,11 +1,14 @@
 import {
-  EJECTION_MS, GAMEOVER_MS, INITIAL_KILL_COOLDOWN_MS, LIGHTS_FADE_MS, LIGHTS_VISION_FACTOR,
-  MEETING_INTRO_MS, MIN_PLAYERS, RESULTS_MS, REVEAL_MS, SABOTAGE_AFTER_MEETING_MS, TICK_MS, USE_RANGE, VISION_BASE,
+  DECON_MS, DOOR_LOG_MAX, EJECTION_MS, GAMEOVER_MS, INITIAL_KILL_COOLDOWN_MS, LIGHTS_FADE_MS, LIGHTS_VISION_FACTOR,
+  MEETING_INTRO_MS, MIN_PLAYERS, RESULTS_MS, REVEAL_MS, SABOTAGE_AFTER_MEETING_MS, SENSOR_COOLDOWN_MS, TICK_MS, USE_RANGE, VISION_BASE,
 } from '../../shared/constants';
-import { clamp, dist, lerp } from '../../shared/geom';
-import { getShip, spawnPoint, type CompiledMap } from '../../shared/map';
+import { clamp, dist, lerp, pointInRect, segsIntersect } from '../../shared/geom';
+import { getMap, spawnPoint, type CompiledMap } from '../../shared/map';
+import { stationDistance } from '../../shared/map/build';
+import type { StationDef } from '../../shared/map/types';
 import type { ServerMessage } from '../../shared/protocol';
 import { makeRng, shuffle, type Rng } from '../../shared/rng';
+import { COMMS_CODE_MS, commsCode } from '../../shared/rules/sabotage';
 import { assignRoles } from '../../shared/rules/roles';
 import { assignTasks } from '../../shared/rules/tasks';
 import { tallyVotes } from '../../shared/rules/voting';
@@ -13,7 +16,7 @@ import { checkWin } from '../../shared/rules/win';
 import type { GameSettings } from '../../shared/settings';
 import { doorSegs, stepPlayer } from '../../shared/sim/movement';
 import {
-  CRITICAL_SABOTAGES, isImpostorRole, type EjectionInfo, type GameEvent, type GameOverInfo, type Phase, type Role,
+  CRITICAL_SABOTAGES, isImpostorRole, type DoorLogEntry, type EjectionInfo, type GameEvent, type GameOverInfo, type Phase, type Role,
   type SabotageState, type WinReason, type Winner,
 } from '../../shared/types';
 import { handleAction } from './actions';
@@ -42,7 +45,7 @@ export type Send = (playerId: string, msg: ServerMessage) => void;
  * advances through update(now), so tests can drive it with a fake clock.
  */
 export class Game {
-  readonly map: CompiledMap = getShip();
+  readonly map: CompiledMap;
   readonly settings: GameSettings;
   readonly dev: boolean;
   readonly rng: Rng;
@@ -70,6 +73,11 @@ export class Game {
   doorReadyAt = new Map<string, number>();
   buttonReadyAt = 0;
   frozenTaskBar = 0;
+  /** Door log, newest first. */
+  doorLog: DoorLogEntry[] = [];
+  /** Seed for keypad comms codes, drawn when comms is sabotaged. */
+  commsSeed = 0;
+  private commsWin = -1;
 
   private pubDirty = true;
   private privDirty = new Set<string>();
@@ -77,6 +85,7 @@ export class Game {
 
   constructor(opts: GameOptions, readonly send: Send) {
     this.settings = opts.settings;
+    this.map = getMap(opts.settings.map ?? 'skeld');
     this.dev = !!opts.dev;
     this.rng = makeRng(opts.seed);
     this.now = opts.now;
@@ -92,7 +101,7 @@ export class Game {
 
     opts.players.forEach((init, i) => {
       const role = roles[init.id];
-      const sp = spawnPoint(this.map.def, i, opts.players.length);
+      const sp = spawnPoint(this.map.def, i, opts.players.length, this.map.def.start);
       const p: SPlayer = {
         ...init,
         eid: eids[i],
@@ -122,6 +131,10 @@ export class Game {
         vote: null,
         lastChatAt: 0,
         noclip: false,
+        prevX: sp.x,
+        prevY: sp.y,
+        deconDone: null,
+        sensorAt: {},
       };
       this.players.push(p);
       this.byId.set(p.id, p);
@@ -164,6 +177,11 @@ export class Game {
 
   inRange(p: SPlayer, x: number, y: number, range = USE_RANGE): boolean {
     return dist(p.x, p.y, x, y) <= range + 12;
+  }
+
+  /** Close enough to use a station (from any side of its area, if it has one). */
+  atStation(p: SPlayer, st: StationDef): boolean {
+    return stationDistance(st, p.x, p.y) <= USE_RANGE + 12;
   }
 
   taskProgress(): { done: number; total: number } {
@@ -287,6 +305,8 @@ export class Game {
     const segs = moving ? this.closedDoorSegs() : [];
     for (const p of this.players) {
       if (p.removed) continue;
+      p.prevX = p.x;
+      p.prevY = p.y;
       if (!moving || p.venting || !p.connected) {
         // Acknowledge but ignore movement while frozen.
         if (p.inputs.length) {
@@ -328,6 +348,8 @@ export class Game {
         this.markPub();
       }
     }
+    this.tickDecon(now);
+    this.tickSensors(now);
 
     // Sabotage
     if (this.sabotage) {
@@ -340,7 +362,7 @@ export class Game {
         for (const [st, holder] of this.reactorHolders) {
           const hp = this.byId.get(holder);
           const station = this.map.stations.get(st)!;
-          if (!hp || !hp.alive || !hp.connected || hp.openStation?.id !== st || !this.inRange(hp, station.x, station.y)) {
+          if (!hp || !hp.alive || !hp.connected || hp.openStation?.id !== st || !this.atStation(hp, station)) {
             this.reactorHolders.delete(st);
             changed = true;
           }
@@ -382,10 +404,75 @@ export class Game {
       }
     }
 
+    // Keypad comms codes roll over: panels that are open need the new one.
+    if (this.sabotage?.keypad) {
+      const win = Math.floor(now / COMMS_CODE_MS);
+      if (win !== this.commsWin) {
+        this.commsWin = win;
+        for (const p of this.players) if (p.openStation && this.sabotage.stations.includes(p.openStation.id)) this.markPriv(p);
+      }
+    }
+
     if (now >= this.nextConsoleRefresh) {
       this.nextConsoleRefresh = now + 500;
       for (const p of this.players) if (p.console === 'admin' || p.console === 'vitals' || p.battery?.open) this.markPriv(p);
     }
+  }
+
+  /**
+   * Walking into a decontamination zone shuts its doors for a spray cycle.
+   * Anyone in the chamber for a cycle is clean until they leave the room, so
+   * stepping back from a door that just opened doesn't start another one.
+   */
+  private tickDecon(now: number): void {
+    for (const dc of this.map.def.decon ?? []) {
+      const cycling = dc.doors.some((d) => this.doors.has(d));
+      let trigger = false;
+      const inRoom: SPlayer[] = [];
+      for (const p of this.players) {
+        const here = !p.removed && p.alive && !p.venting;
+        if (here && this.map.roomAt(p.x, p.y) === dc.room) inRoom.push(p);
+        else if (p.deconDone === dc.id) p.deconDone = null;
+        if (here && p.deconDone !== dc.id && pointInRect(p.x, p.y, dc.zone)) trigger = true;
+      }
+      if (trigger && !cycling) {
+        for (const d of dc.doors) this.doors.set(d, now + DECON_MS);
+        this.markPub();
+      }
+      if (trigger || cycling) for (const p of inRoom) p.deconDone = dc.id;
+    }
+  }
+
+  /** Door log: note everyone who walked across a sensor this tick. */
+  private tickSensors(now: number): void {
+    const sensors = this.map.def.sensors;
+    if (!sensors?.length) return;
+    let logged = false;
+    for (const p of this.players) {
+      if (p.removed || !p.alive || p.venting) continue;
+      if (p.x === p.prevX && p.y === p.prevY) continue;
+      // A teleport (vent, meeting) isn't walking through anything.
+      if (dist(p.x, p.y, p.prevX, p.prevY) > 40) continue;
+      for (const s of sensors) {
+        if (!segsIntersect(p.prevX, p.prevY, p.x, p.y, s.seg)) continue;
+        if (now - (p.sensorAt[s.id] ?? -Infinity) < SENSOR_COOLDOWN_MS) continue;
+        p.sensorAt[s.id] = now;
+        const look = p.shift?.as ? this.byId.get(p.shift.as) ?? p : p;
+        this.doorLog.unshift({ color: look.color, sensor: s.name, at: now });
+        logged = true;
+      }
+    }
+    if (!logged) return;
+    this.doorLog.length = Math.min(this.doorLog.length, DOOR_LOG_MAX);
+    for (const p of this.players) if (p.console === 'doorlog') this.markPriv(p);
+  }
+
+  /** Codes a keypad comms station accepts right now (the previous one briefly too, for lag). */
+  commsCodesFor(stationId: string): string[] {
+    const win = Math.floor(this.now / COMMS_CODE_MS);
+    const out = [commsCode(this.commsSeed, stationId, win)];
+    if (this.now - win * COMMS_CODE_MS < 1500) out.push(commsCode(this.commsSeed, stationId, win - 1));
+    return out;
   }
 
   private advancePhase(): void {
@@ -543,7 +630,7 @@ export class Game {
     this.ejection = null;
     const active = this.active;
     active.forEach((p, i) => {
-      const sp = spawnPoint(this.map.def, i, active.length);
+      const sp = spawnPoint(this.map.def, i, active.length, this.map.def.spawn);
       this.teleport(p, sp.x, sp.y);
       p.vote = null;
       if (this.isImpostor(p)) p.killReadyAt = now + this.settings.killCooldown * 1000;

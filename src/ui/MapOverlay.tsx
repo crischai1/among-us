@@ -1,5 +1,6 @@
 import { DOOR_COOLDOWN_MS } from '../../shared/constants';
-import type { MapDef } from '../../shared/map/types';
+import { roomLabel } from '../../shared/map/compile';
+import type { MapDef, Poly } from '../../shared/map/types';
 import { isImpostorRole } from '../../shared/types';
 import { closeOverlay } from '../game/actions';
 import { TASK_THEME } from '../tasks/theme';
@@ -9,10 +10,9 @@ import { world } from '../world/world';
 import { CrewmateSvg } from './CrewmateSvg';
 import { useNow } from './GameHud';
 
-export const roomCenter = (id: string, def: MapDef = world.map.def) => {
-  const r = def.rooms.find((x) => x.id === id)!.rects[0];
-  return { x: r.x + r.w / 2, y: r.y + r.h / 2 };
-};
+export const roomCenter = (id: string, def: MapDef = world.map.def) => roomLabel(def.rooms.find((x) => x.id === id)!);
+
+const points = (p: Poly) => p.map((v) => `${v.x},${v.y}`).join(' ');
 
 /** Markers are sized for the Skeld; bigger maps scale them up to stay readable. */
 export const markScale = (def: MapDef = world.map.def) => Math.max(def.size.w, def.size.h * 1.65) / 3300;
@@ -22,26 +22,46 @@ export function ShipSvg({ def = world.map.def, children }: { def?: MapDef; child
   const k = markScale(def);
   return (
     <svg className="ship-map" viewBox={`-40 -40 ${def.size.w + 80} ${def.size.h + 80}`}>
+      {/* Open ground (Polus' snow) under everything else. */}
+      {def.rooms
+        .filter((r) => r.outdoor)
+        .map((r) => (
+          <g key={r.id} className="map-outdoor">
+            {r.rects.map((rc, i) => (
+              <rect key={i} x={rc.x} y={rc.y} width={rc.w} height={rc.h} shapeRendering="crispEdges" />
+            ))}
+            {r.polys?.map((p, i) => <polygon key={`p${i}`} points={points(p)} />)}
+          </g>
+        ))}
       {def.halls.map((h, i) => (
         <rect key={i} x={h.x} y={h.y} width={h.w} height={h.h} className="map-hall" />
       ))}
-      {def.rooms.map((r) => (
-        <g key={r.id}>
-          {r.rects.map((rc, i) => (
-            <rect key={i} x={rc.x} y={rc.y} width={rc.w} height={rc.h} className="map-room" rx={r.rects.length > 1 ? 0 : 10} style={r.rects.length > 1 ? { strokeWidth: 16 } : undefined} />
-          ))}
-          {/* Areas made of several pieces: fill again over the outlines so the seams between pieces vanish. */}
-          {r.rects.length > 1 &&
-            r.rects.map((rc, i) => (
-              <rect key={`f${i}`} x={rc.x} y={rc.y} width={rc.w} height={rc.h} className="map-room" style={{ stroke: 'none' }} shapeRendering="crispEdges" />
+      {def.hallPolys?.map((p, i) => <polygon key={`p${i}`} points={points(p)} className="map-hall map-seam" />)}
+      {def.rooms.filter((r) => !r.outdoor).map((r) => {
+        const polys = r.polys ?? [];
+        const pieces = r.rects.length + polys.length;
+        return (
+          <g key={r.id}>
+            {r.rects.map((rc, i) => (
+              <rect key={i} x={rc.x} y={rc.y} width={rc.w} height={rc.h} className="map-room" rx={pieces > 1 ? 0 : 10} style={pieces > 1 ? { strokeWidth: 16 } : undefined} />
             ))}
-        </g>
-      ))}
-      {def.rooms.map((r) => {
+            {polys.map((p, i) => (
+              <polygon key={`p${i}`} points={points(p)} className="map-room" style={{ strokeWidth: 16 }} />
+            ))}
+            {/* Areas made of several pieces: fill again over the outlines so the seams between pieces vanish. */}
+            {pieces > 1 &&
+              r.rects.map((rc, i) => (
+                <rect key={`f${i}`} x={rc.x} y={rc.y} width={rc.w} height={rc.h} className="map-room" style={{ stroke: 'none' }} shapeRendering="crispEdges" />
+              ))}
+            {pieces > 1 && polys.map((p, i) => <polygon key={`fp${i}`} points={points(p)} className="map-room map-seam" />)}
+          </g>
+        );
+      })}
+      {def.rooms.filter((r) => !r.outdoor).map((r) => {
         const c = roomCenter(r.id, def);
         return (
           <text key={r.id} x={c.x} y={c.y} className="map-label" style={{ fontSize: 46 * k, strokeWidth: 8 * k }}>
-            {r.name}
+            {r.short ?? r.name}
           </text>
         );
       })}
@@ -100,7 +120,7 @@ export function MapOverlay() {
   const sab = pub.sabotage;
   const def = world.map.def;
   const k = markScale();
-  const doorRooms = [...new Set(def.doors.map((d) => d.room))];
+  const doorRooms = [...new Set(def.doors.filter((d) => !d.auto).map((d) => d.room))];
   const sabReady = now >= priv.sabotageReadyAt && !sab;
   const sabCd = Math.max(0, Math.ceil((priv.sabotageReadyAt - now) / 1000));
 

@@ -1,10 +1,10 @@
-import { BUTTON_RANGE, CHAT_INTERVAL_MS, DOOR_CLOSE_MS, DOOR_COOLDOWN_MS, KILL_RANGES, MAX_CHAT_LENGTH, REPORT_RANGE, SABOTAGE_COOLDOWN_MS, USE_RANGE } from '../../shared/constants';
-import { dist } from '../../shared/geom';
+import { BUTTON_RANGE, CHAT_INTERVAL_MS, DOOR_CLOSE_MS, DOOR_USE_RANGE, MANUAL_DOOR_MS, DOOR_COOLDOWN_MS, KILL_RANGES, MAX_CHAT_LENGTH, REPORT_RANGE, SABOTAGE_COOLDOWN_MS, USE_RANGE } from '../../shared/constants';
+import { dist, segDist } from '../../shared/geom';
 import type { ClientMessage } from '../../shared/protocol';
 import { applyFix, makeO2Code, newSabotage } from '../../shared/rules/sabotage';
-import { TASK_DEFS } from '../../shared/rules/tasks';
+import { advanceTask, TASK_DEFS, taskReady } from '../../shared/rules/tasks';
 import { hasLineOfSight } from '../../shared/sim/visibility';
-import { canVentRole, type SabotageKind } from '../../shared/types';
+import { canVentRole, type ConsoleKind, type SabotageKind } from '../../shared/types';
 import { runDevCommand } from './devCommands';
 import type { Game } from './Game';
 import { latestSeq, queueInput, type SPlayer } from './types';
@@ -32,6 +32,8 @@ export function handleAction(g: Game, p: SPlayer, msg: ClientMessage): void {
       return;
     case 'fix':
       return fix(g, p, msg.kind, msg.stationId, msg.data);
+    case 'openDoor':
+      return openDoor(g, p, msg.doorId);
     case 'sabotage':
       return sabotage(g, p, msg.kind, msg.room);
     case 'vent':
@@ -111,11 +113,12 @@ function currentTask(p: SPlayer, stationId: string) {
 function taskOpen(g: Game, p: SPlayer, stationId: string): void {
   if (g.phase !== 'playing' || p.venting || !p.connected) return;
   const st = g.map.stations.get(stationId);
-  if (!st || !g.inRange(p, st.x, st.y)) return;
+  if (!st || !g.atStation(p, st)) return;
   if (g.isSabotageStation(stationId)) {
     if (!p.alive || !g.sabotage || !g.sabotage.stations.includes(stationId)) return;
   } else {
-    if (g.isImpostor(p) || !currentTask(p, stationId)) return;
+    const t = currentTask(p, stationId);
+    if (g.isImpostor(p) || !t || !taskReady(t, g.now)) return;
   }
   if (p.openStation) g.releasePanels(p);
   p.openStation = { id: stationId, at: g.now, seq: latestSeq(p) };
@@ -129,11 +132,7 @@ function taskDone(g: Game, p: SPlayer, stationId: string): void {
   if (!t || t.fake) return;
   const minMs = TASK_DEFS[t.type].minMs[t.step] ?? 0;
   if (g.now - p.openStation.at < minMs) return;
-  t.step++;
-  if (t.step >= t.stations.length) {
-    t.done = true;
-    t.step = t.stations.length - 1;
-  }
+  advanceTask(t, g.now);
   p.openStation = null;
   g.markPriv(p);
   g.markPub();
@@ -144,7 +143,7 @@ function fix(g: Game, p: SPlayer, kind: SabotageKind, stationId: string, data: n
   const s = g.sabotage;
   if (g.phase !== 'playing' || !p.alive || !s || s.kind !== kind || p.openStation?.id !== stationId) return;
   const st = g.map.stations.get(stationId);
-  if (!st || !g.inRange(p, st.x, st.y)) return;
+  if (!st || !g.atStation(p, st)) return;
   let held: string[] | undefined;
   if (kind === 'reactor') {
     if (data === true) g.reactorHolders.set(stationId, p.id);
@@ -153,7 +152,8 @@ function fix(g: Game, p: SPlayer, kind: SabotageKind, stationId: string, data: n
     // Both scanners must be held by two different people.
     if (new Set(g.reactorHolders.values()).size < g.reactorHolders.size) return;
   }
-  const fixed = applyFix(s, stationId, data, { o2Code: g.o2Code, held });
+  const commsCodes = kind === 'comms' && s.keypad ? g.commsCodesFor(stationId) : undefined;
+  const fixed = applyFix(s, stationId, data, { o2Code: g.o2Code, held, commsCodes });
   g.markPub();
   if (!fixed) {
     g.markPriv(p);
@@ -172,9 +172,9 @@ function sabotage(g: Game, p: SPlayer, kind: SabotageKind | 'doors', room?: stri
   const now = g.now;
   if (kind === 'doors') {
     if (typeof room !== 'string') return;
-    const doors = g.map.def.doors.filter((d) => d.room === room);
+    const doors = g.map.def.doors.filter((d) => d.room === room && !d.auto);
     if (!doors.length || now < (g.doorReadyAt.get(room) ?? 0)) return;
-    for (const d of doors) g.doors.set(d.id, now + DOOR_CLOSE_MS);
+    for (const d of doors) g.doors.set(d.id, now + (g.map.def.manualDoors ? MANUAL_DOOR_MS : DOOR_CLOSE_MS));
     g.doorReadyAt.set(room, now + DOOR_COOLDOWN_MS);
     g.emitAll({ k: 'doorSlam', room });
     for (const q of g.players) if (g.isImpostor(q)) g.markPriv(q);
@@ -185,6 +185,16 @@ function sabotage(g: Game, p: SPlayer, kind: SabotageKind | 'doors', room?: stri
   startSabotage(g, kind);
 }
 
+/** Polus: a living player next to a sabotaged door flipped its switches. */
+function openDoor(g: Game, p: SPlayer, doorId: unknown): void {
+  if (!canAct(g, p) || !g.map.def.manualDoors || typeof doorId !== 'string') return;
+  const d = g.map.doors.get(doorId);
+  if (!d || d.auto || !g.doors.has(doorId)) return;
+  if (segDist(p.x, p.y, d.seg) > DOOR_USE_RANGE + SLACK) return;
+  g.doors.delete(doorId);
+  g.markPub();
+}
+
 /** Start a sabotage this map supports. Returns false if it has none of that kind. */
 export function startSabotage(g: Game, kind: SabotageKind): boolean {
   const def = g.map.sabotages.get(kind);
@@ -193,7 +203,8 @@ export function startSabotage(g: Game, kind: SabotageKind): boolean {
   g.sabotageReadyAt = g.now + SABOTAGE_COOLDOWN_MS;
   if (kind === 'o2') g.o2Code = makeO2Code(g.rng);
   if (kind === 'comms') {
-    for (const q of g.players) if (q.console === 'cams' || q.console === 'admin') q.console = null;
+    g.commsSeed = Math.floor(g.rng() * 2 ** 31);
+    for (const q of g.players) if (q.console && q.console !== 'vitals') q.console = null;
   }
   g.markPub();
   g.markAllPriv();
@@ -232,7 +243,7 @@ function vent(g: Game, p: SPlayer, action: 'enter' | 'move' | 'exit', ventId?: s
   g.markPub();
 }
 
-function consoleUse(g: Game, p: SPlayer, kind: 'cams' | 'admin' | 'vitals', open: boolean): void {
+function consoleUse(g: Game, p: SPlayer, kind: ConsoleKind, open: boolean): void {
   if (!open) {
     if (p.console) {
       p.console = null;
@@ -243,7 +254,7 @@ function consoleUse(g: Game, p: SPlayer, kind: 'cams' | 'admin' | 'vitals', open
   }
   if (!canAct(g, p)) return;
   // Any panel of that kind works, in case a map has more than one.
-  if (!g.map.def.stations.some((s) => s.kind === kind && g.inRange(p, s.x, s.y))) return;
+  if (!g.map.def.stations.some((s) => s.kind === kind && g.atStation(p, s))) return;
   if (g.commsDown && kind !== 'vitals') return;
   p.openStation = null;
   p.console = kind;

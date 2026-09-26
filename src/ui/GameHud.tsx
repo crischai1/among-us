@@ -84,7 +84,7 @@ function TaskPanel({ dead }: { dead: boolean }) {
                 {sab.label}
                 {sab.endsAt && ` ${secs(sab.endsAt - now)}s`}
                 {sab.kind === 'reactor' && ` (${sab.reactorHeld.length}/${sab.stations.length})`}
-                {sab.kind === 'o2' && ` (${sab.o2Done.length}/${sab.stations.length})`}
+                {sab.kind === 'o2' && ` (${sab.panelsDone.length}/${sab.stations.length})`}
               </div>
             )}
             {priv.commsDown && !imp ? (
@@ -98,6 +98,7 @@ function TaskPanel({ dead }: { dead: boolean }) {
                     <span>
                       {t.room}: {t.name}
                       {t.steps > 1 && ` (${t.done ? t.steps : t.step}/${t.steps})`}
+                      {!t.done && typeof t.params.readyAt === 'number' && t.params.readyAt > now && ` ⏳ ${secs(t.params.readyAt - now)}s`}
                     </span>
                   </div>
                 ))}

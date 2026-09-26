@@ -1,8 +1,10 @@
 import type { KillDistance } from './constants';
 
 export type TaskBarUpdates = 'always' | 'meetings' | 'never';
+export type MapId = 'skeld' | 'mira' | 'polus';
 
 export interface GameSettings {
+  map: MapId;
   impostors: number;
   killCooldown: number;
   killDistance: KillDistance;
@@ -35,6 +37,7 @@ export interface GameSettings {
 }
 
 export const DEFAULT_SETTINGS: GameSettings = {
+  map: 'skeld',
   impostors: 2,
   killCooldown: 25,
   killDistance: 'medium',
@@ -79,6 +82,10 @@ const num = (key: Key, label: string, group: string, min: number, max: number, s
 
 /** Drives both the lobby settings panel and server-side validation. */
 export const SETTINGS_SCHEMA: SettingDef[] = [
+  {
+    key: 'map', label: 'Map', group: 'Map', type: 'select',
+    options: [{ value: 'skeld', label: 'The Skeld' }, { value: 'mira', label: 'MIRA HQ' }, { value: 'polus', label: 'Polus' }],
+  },
   num('impostors', 'Impostors', 'Impostors', 1, 3, 1),
   num('killCooldown', 'Kill Cooldown', 'Impostors', 10, 60, 2.5, 's'),
   {

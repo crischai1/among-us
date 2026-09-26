@@ -186,6 +186,11 @@
 .map-room { fill: #2d4d77; stroke: #9bd1ff; stroke-width: 8; }
 .map-panel.imp .map-room { fill: #6b2025; stroke: #ff9b9b; }
 .map-hall { fill: #2d4d77; }
+/* Polygon pieces are filled again with a thin matching stroke, hiding the anti-aliased seam where they meet a rectangle. */
+.map-seam { stroke: #2d4d77; stroke-width: 3; }
+.map-outdoor { fill: #3c4f69; stroke: #3c4f69; stroke-width: 2; }
+.map-panel.imp .map-outdoor { fill: #5a2a30; stroke: #5a2a30; }
+.map-panel.imp .map-seam { stroke: #6b2025; }
 .map-panel.imp .map-hall { fill: #6b2025; }
 .map-label { fill: #fff; font-size: 46px; font-weight: 800; text-anchor: middle; font-family: var(--font); paint-order: stroke; stroke: #000; stroke-width: 8px; pointer-events: none; }
 .map-self { fill: #fff; stroke: #000; stroke-width: 8; }
@@ -211,6 +216,7 @@
 /* Security */
 .security { position: relative; padding: 16px; background: #10151d; }
 .cam-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; width: min(980px, calc(100vw - 60px)); }
+.cam-grid.many { grid-template-columns: repeat(3, minmax(0, 1fr)); width: min(1200px, calc(100vw - 60px)); }
 .cam { position: relative; border: 3px solid #000; border-radius: 6px; overflow: hidden; background: #000; }
 .cam canvas { display: block; width: 100%; height: auto; filter: saturate(0.85) contrast(1.05); }
 .cam-label { position: absolute; left: 8px; bottom: 6px; font-weight: 800; text-shadow: 0 0 4px #000; }
@@ -395,3 +401,37 @@
 .dial { width: 180px; height: 180px; border-radius: 50%; background: #2b3440; border: 4px solid #000; display: flex; align-items: center; justify-content: center; cursor: grab; touch-action: none; }
 .dial-knob { width: 130px; height: 130px; border-radius: 50%; background: #8d97a3; border: 3px solid #000; position: relative; }
 .dial-knob span { position: absolute; right: 8px; top: 50%; width: 30px; height: 8px; margin-top: -4px; background: #ff4a4a; border-radius: 4px; }
+
+/* MIRA HQ tasks */
+.idcode { display: flex; gap: 18px; align-items: center; justify-content: center; width: 100%; }
+.idcode-wallet { width: 220px; flex-shrink: 0; }
+.beverage { display: flex; gap: 12px; align-items: center; width: 100%; }
+.beverage .task-svg { flex: 1; min-width: 0; }
+.bev-pad { display: flex; flex-direction: column; gap: 8px; padding: 10px; background: #222; border: 3px solid #000; border-radius: 10px; }
+.bev-pad .keypad-screen { letter-spacing: 3px; font-size: 20px; min-width: 110px; }
+.bev-keys { display: grid; grid-template-columns: repeat(3, 38px); gap: 6px; }
+.bev-keys .key { height: 38px; font-size: 18px; }
+.key.sel { background: #ffe14d; }
+
+/* Comms keypad (MIRA HQ) */
+.comms-keypad { display: flex; gap: 18px; align-items: center; }
+.comms-code { background: #0b1520; border: 3px solid #000; border-radius: 10px; padding: 12px 16px; display: flex; flex-direction: column; align-items: center; gap: 6px; color: #7fe0ff; font-family: monospace; }
+.comms-code b { font-size: 30px; letter-spacing: 5px; color: #9dffac; }
+.comms-code small { color: var(--muted); }
+.comms-timer { width: 120px; height: 8px; background: #111; border-radius: 4px; overflow: hidden; }
+.comms-timer span { display: block; height: 100%; background: #46d2ff; }
+
+/* Door log (MIRA HQ) */
+.doorlog { position: relative; width: min(560px, calc(100vw - 32px)); padding: 18px; background: #0f1b2b; }
+.doorlog h2 { margin: 0 0 10px; }
+.doorlog-sensors { display: flex; gap: 8px; margin-bottom: 10px; }
+.doorlog-sensor { flex: 1; text-align: center; background: #16283d; border: 2px solid #000; border-radius: 8px; padding: 6px; font-size: 13px; color: #7fe0ff; font-weight: 700; }
+.doorlog-list { background: #061a10; border: 3px solid #000; border-radius: 10px; padding: 8px; height: min(52vh, 420px); overflow-y: auto; font-family: monospace; }
+.doorlog-row { display: flex; align-items: center; gap: 10px; padding: 3px 4px; color: #9dffac; border-bottom: 1px solid #0f3a22; }
+.doorlog-row .when { margin-left: auto; color: #4e9a67; font-size: 12px; }
+.doorlog-empty { color: #4e9a67; text-align: center; margin-top: 30px; }
+.help-map-pick { display: flex; gap: 8px; }
+.help-sensor { stroke: #46d2ff; stroke-linecap: round; }
+.help-decon { stroke: #f2c230; stroke-linecap: round; }
+.help-legend .dot.sensor { background: #46d2ff; border-radius: 3px; }
+.help-legend .dot.decon { background: #f2c230; border-radius: 3px; }

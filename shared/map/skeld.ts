@@ -12,6 +12,7 @@ const WIRES = ids('wires', ['electrical', 'storage', 'admin', 'navigation', 'caf
 export const SKELD: MapDef = {
   id: 'skeld',
   name: 'The Skeld',
+  blurb: 'The spaceship. Compact and full of doors, with Security cameras watching the main corridors.',
   theme: { void: '#07090f', hall: 'metal' },
   size: { w: 3300, h: 2000 },
   rooms: [
@@ -26,7 +27,7 @@ export const SKELD: MapDef = {
     { id: 'navigation', name: 'Navigation', rects: [{ x: 2900, y: 750, w: 350, h: 400 }], floor: 'carpet' },
     { id: 'shields', name: 'Shields', rects: [{ x: 2450, y: 1400, w: 400, h: 350 }], floor: 'dark' },
     { id: 'comms', name: 'Communications', rects: [{ x: 2050, y: 1680, w: 350, h: 270 }], floor: 'grate' },
-    { id: 'storage', name: 'Storage', rects: [{ x: 1500, y: 1100, w: 450, h: 650 }], floor: 'metal' },
+    { id: 'storage', name: 'Storage', rects: [{ x: 1500, y: 1100, w: 450, h: 650 }], floor: 'metal', label: { x: 1725, y: 1500 } },
     { id: 'admin', name: 'Admin', rects: [{ x: 2050, y: 920, w: 350, h: 300 }], floor: 'carpet' },
     {
       // Tall room that steps in twice down its right side, with a cabinet
@@ -112,7 +113,7 @@ export const SKELD: MapDef = {
   stations: [
     // Consoles
     st('cams', 'security', 725, 850),
-    st('admin', 'admin', 2225, 1070),
+    st('admin', 'admin', 2225, 1070, { area: { x: 2175, y: 1040, w: 100, h: 60 } }),
     st('vitals', 'medbay', 1225, 800),
     // Sabotage fixes
     st('lights', 'electrical', 1040, 1190),

@@ -4,7 +4,7 @@ import type { ConsoleKind, GameEvent, PrivState, PubState } from '../../shared/t
 export type ChatMsg = Extract<GameEvent, { k: 'chat' }>;
 
 export interface UseTarget {
-  kind: 'task' | 'fix' | 'console' | 'button' | 'laptop';
+  kind: 'task' | 'fix' | 'console' | 'button' | 'laptop' | 'door';
   id: string;
   label: string;
 }
@@ -19,6 +19,7 @@ export interface Nearby {
 export type Overlay =
   | { kind: 'task'; stationId: string }
   | { kind: 'fix'; stationId: string }
+  | { kind: 'door'; doorId: string }
   | { kind: 'console'; console: ConsoleKind }
   | { kind: 'map' }
   | { kind: 'colors' }

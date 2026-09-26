@@ -111,6 +111,9 @@ export function moveCtx(): MoveCtx {
 /** Apply a server snapshot: reconcile our own prediction and buffer others. */
 export function applySnap(msg: SnapMessage): void {
   const s = world.self;
+  // After a page reload our counter restarts at 0, but the server drops any
+  // input numbered at or below the last one it applied for this seat.
+  if (msg.ack > world.seq) world.seq = msg.ack;
   if (msg.you) {
     const [x, y, flags] = msg.you;
     s.flags = flags;

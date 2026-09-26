@@ -1,4 +1,4 @@
-import { spawnPoint } from '../../shared/map';
+import { roomLabel, spawnPoint } from '../../shared/map';
 import type { SabotageKind } from '../../shared/types';
 import { startSabotage } from './actions';
 import type { Game } from './Game';
@@ -12,8 +12,10 @@ export function runDevCommand(g: Game, p: SPlayer, raw: string): void {
     case 'tp': {
       const room = g.map.def.rooms.find((r) => r.id.toLowerCase() === args[0]?.toLowerCase() || r.name.toLowerCase() === args.join(' ').toLowerCase());
       if (!room) return say(`rooms: ${g.map.def.rooms.map((r) => r.id).join(', ')}`);
-      const r = room.rects[0];
-      g.teleport(p, r.x + r.w / 2, r.y + r.h - 40);
+      const c = roomLabel(room);
+      g.teleport(p, c.x, c.y);
+      p.prevX = p.x;
+      p.prevY = p.y;
       return say(`teleported to ${room.name}`);
     }
     case 'noclip':

@@ -4,7 +4,9 @@ import { useGame } from '../store/game';
 import { useSession } from '../store/session';
 import { TaskOverlay } from '../tasks/TaskOverlay';
 import { ColorPicker } from './ColorPicker';
+import { DoorLogView } from './DoorLogView';
 import { AdminView, MapOverlay } from './MapOverlay';
+import { DoorSwitches } from './sabotage/DoorSwitches';
 import { SabotageFix } from './sabotage/SabotageFix';
 import { SecurityView } from './SecurityView';
 import { SettingsOverlay } from './SettingsPanel';
@@ -26,6 +28,7 @@ export function Overlays() {
     if (overlay.kind === 'fix' && (!pub?.sabotage || !pub.sabotage.stations.includes(overlay.stationId))) {
       return void useGame.getState().set({ overlay: null });
     }
+    if (overlay.kind === 'door' && !(overlay.doorId in (pub?.doors ?? {}))) return void useGame.getState().set({ overlay: null });
     if (overlay.kind === 'console' && priv && priv.console !== overlay.console) {
       const t = setTimeout(() => {
         if (useGame.getState().priv?.console !== overlay.console) useGame.getState().set({ overlay: null });
@@ -50,11 +53,14 @@ export function Overlays() {
       return <TaskOverlay stationId={overlay.stationId} />;
     case 'fix':
       return <SabotageFix stationId={overlay.stationId} />;
+    case 'door':
+      return <DoorSwitches doorId={overlay.doorId} />;
     case 'map':
       return <MapOverlay />;
     case 'console':
       if (overlay.console === 'cams') return <SecurityView />;
       if (overlay.console === 'admin') return <AdminView />;
+      if (overlay.console === 'doorlog') return <DoorLogView />;
       return <VitalsView />;
     case 'portableVitals':
       return <VitalsView portable />;

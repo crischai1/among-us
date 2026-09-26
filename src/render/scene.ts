@@ -5,7 +5,7 @@ import { serverNow } from '../net/clock';
 import { world } from '../world/world';
 import { drawBody, drawCrewmate, drawKillOutline, drawNameTag } from './crewmate';
 import { drawFloors, drawWalls } from './mapLayer';
-import { drawCameras, drawDoors, drawProps, drawVents } from './props';
+import { drawCameras, drawDecals, drawDecon, drawDoors, drawProps, drawSensors, drawVents } from './props';
 
 export interface Look {
   name: string;
@@ -39,6 +39,9 @@ interface Drawable {
 /** Static layer under the fog: floors, vents, props. */
 export function drawSceneFloor(ctx: CanvasRenderingContext2D, map: CompiledMap, t: number, ventHighlight: string | null): void {
   drawFloors(ctx, map);
+  drawDecals(ctx, map);
+  drawSensors(ctx, map, t);
+  drawDecon(ctx, map, world.closedDoors, t);
   drawVents(ctx, map, ventHighlight);
   drawProps(ctx, map, t);
 }
