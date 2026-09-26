@@ -1,6 +1,5 @@
 import { BUTTON_RANGE, KILL_RANGES, REPORT_RANGE, USE_RANGE } from '../../shared/constants';
 import { dist } from '../../shared/geom';
-import { SABOTAGE_STATIONS } from '../../shared/rules/sabotage';
 import { hasLineOfSight } from '../../shared/sim/visibility';
 import { doorSegs } from '../../shared/sim/movement';
 import { canVentRole, F_GHOST, F_TEAMMATE, isImpostorRole } from '../../shared/types';
@@ -49,7 +48,7 @@ export function computeNearby(): Nearby {
   }
   if (alive) {
     if (pub.sabotage) {
-      for (const id of SABOTAGE_STATIONS[pub.sabotage.kind]) {
+      for (const id of pub.sabotage.stations) {
         const st = map.stations.get(id);
         if (st) consider({ kind: 'fix', id, label: 'Fix' }, st.x, st.y);
       }

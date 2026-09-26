@@ -1,7 +1,7 @@
 import { INTERP_DELAY_MS } from '../../shared/constants';
 import { serverNow } from '../net/clock';
 import { JitterBuffer, sampleAt } from '../net/jitter';
-import { getMap, type CompiledMap } from '../../shared/map';
+import { getMap, type CompiledMap, type WorldId } from '../../shared/map';
 import type { SnapMessage } from '../../shared/protocol';
 import { doorSegs, stepPlayer, type MoveCtx } from '../../shared/sim/movement';
 import { F_GHOST } from '../../shared/types';
@@ -61,7 +61,7 @@ export interface Effect {
  * by the canvas every frame. Kept out of React on purpose.
  */
 export const world = {
-  mapId: 'lobby' as 'lobby' | 'skeld',
+  mapId: 'lobby' as WorldId,
   map: getMap('lobby') as CompiledMap,
   closedDoors: [] as string[],
   speed: 1,
@@ -83,11 +83,11 @@ export const world = {
   seq: 0,
   pending: [] as PendingInput[],
   ents: new Map<number, RemoteEnt>(),
-  bodies: new Map<number, { x: number; y: number; color: number }>(),
+  bodies: new Map<number, { x: number; y: number; color: number; at: number }>(),
   effects: [] as Effect[],
 };
 
-export function setWorldMap(id: 'lobby' | 'skeld'): void {
+export function setWorldMap(id: WorldId): void {
   if (world.mapId === id && world.self.ready) return;
   world.mapId = id;
   world.map = getMap(id);
@@ -166,7 +166,7 @@ export function applySnap(msg: SnapMessage): void {
   for (const e of world.ents.values()) if (!seen.has(e.eid)) e.present = false;
 
   world.bodies.clear();
-  for (const [id, x, y, color] of msg.bodies) world.bodies.set(id, { x, y, color });
+  for (const [id, x, y, color, at] of msg.bodies) world.bodies.set(id, { x, y, color, at });
 }
 
 /** Interpolate remote entities to renderTime and advance their animation. */

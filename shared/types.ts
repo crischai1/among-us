@@ -80,6 +80,10 @@ export interface MeetingState {
 
 export interface SabotageState {
   kind: SabotageKind;
+  /** Display name from the map, e.g. "Reactor Meltdown". */
+  label: string;
+  /** Stations that fix it on the current map. */
+  stations: string[];
   startedAt: number;
   /** Critical sabotages end the game at this time. */
   endsAt: number | null;
@@ -166,8 +170,8 @@ export interface PrivState {
 
 /** [entityId, x, y, flags, lookIndex] – lookIndex indexes the current roster. */
 export type EntTuple = [number, number, number, number, number];
-/** [bodyId, x, y, color] */
-export type BodyTuple = [number, number, number, number];
+/** [bodyId, x, y, color, diedAt] – diedAt is server time, for the fall animation. */
+export type BodyTuple = [number, number, number, number, number];
 
 export const F_GHOST = 1;
 export const F_SCANNING = 2;

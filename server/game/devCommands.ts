@@ -24,8 +24,9 @@ export function runDevCommand(g: Game, p: SPlayer, raw: string): void {
       g.markPriv(p);
       return say('kill ready');
     case 'sab': {
+      const kinds = [...g.map.sabotages.keys()];
       const kind = args[0] as SabotageKind;
-      if (!['lights', 'reactor', 'o2', 'comms'].includes(kind)) return say('usage: /sab lights|reactor|o2|comms');
+      if (!kinds.includes(kind)) return say(`usage: /sab ${kinds.join('|')}`);
       g.sabotage = null;
       startSabotage(g, kind);
       return;

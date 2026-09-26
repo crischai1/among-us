@@ -1,8 +1,9 @@
 import { colorOf } from '../../shared/colors';
 import type { CompiledMap } from '../../shared/map';
 import { F_GHOST, F_SCANNING, F_TEAMMATE } from '../../shared/types';
+import { serverNow } from '../net/clock';
 import { world } from '../world/world';
-import { drawBody, drawCrewmate, drawNameTag } from './crewmate';
+import { drawBody, drawCrewmate, drawKillOutline, drawNameTag } from './crewmate';
 import { drawFloors, drawWalls } from './mapLayer';
 import { drawCameras, drawDoors, drawProps, drawVents } from './props';
 
@@ -25,6 +26,8 @@ export interface SceneOpts {
   fade?: (x: number, y: number) => number;
   ventHighlight: string | null;
   camsInUse: boolean;
+  /** Entity the impostor can kill right now: drawn with a red outline. */
+  killTarget?: number | null;
   names: boolean;
 }
 
@@ -45,6 +48,7 @@ export function drawSceneEntities(ctx: CanvasRenderingContext2D, o: SceneOpts): 
   const fade = o.fade ?? (() => 1);
   const items: Drawable[] = [];
   const tags: { x: number; y: number; name: string; color: string }[] = [];
+  const now = serverNow();
   for (const b of world.bodies.values()) {
     if (!o.visible(b.x, b.y)) continue;
     const a = fade(b.x, b.y);
@@ -53,7 +57,7 @@ export function drawSceneEntities(ctx: CanvasRenderingContext2D, o: SceneOpts): 
       draw: () => {
         ctx.save();
         ctx.globalAlpha = a;
-        drawBody(ctx, b.x, b.y, colorOf(b.color));
+        drawBody(ctx, b.x, b.y, colorOf(b.color), now - b.at);
         ctx.restore();
       },
     });
@@ -72,7 +76,9 @@ export function drawSceneEntities(ctx: CanvasRenderingContext2D, o: SceneOpts): 
       draw: () => {
         ctx.save();
         ctx.globalAlpha = a;
-        drawCrewmate(ctx, e.x, e.y, color, { facing: e.facing, walk: e.walk, amp: e.amp, ghost });
+        const pose = { facing: e.facing, walk: e.walk, amp: e.amp, ghost };
+        if (e.eid === o.killTarget) drawKillOutline(ctx, e.x, e.y, color, pose);
+        drawCrewmate(ctx, e.x, e.y, color, pose);
         if (scanning) drawScan(ctx, e.x, e.y, o.t);
         ctx.restore();
       },

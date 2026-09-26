@@ -1,6 +1,7 @@
 import { circleSegs, rectSegs, type Seg } from '../geom';
 import { SegGrid } from './segGrid';
-import type { CameraDef, DoorDef, MapDef, RoomDef, StationDef, VentDef, WallEdge } from './types';
+import type { SabotageKind } from '../types';
+import type { CameraDef, DoorDef, MapDef, RoomDef, SabotageDef, StationDef, VentDef, WallEdge } from './types';
 
 export const CELL = 10;
 
@@ -22,6 +23,7 @@ export interface CompiledMap {
   vents: Map<string, VentDef>;
   cameras: CameraDef[];
   rooms: Map<string, RoomDef>;
+  sabotages: Map<SabotageKind, SabotageDef>;
   roomAt(x: number, y: number): string | null;
   isWalkable(x: number, y: number): boolean;
 }
@@ -113,6 +115,7 @@ export function compileMap(def: MapDef): CompiledMap {
     vents: new Map(def.vents.map((v) => [v.id, v])),
     cameras: def.cameras,
     rooms: new Map(def.rooms.map((r) => [r.id, r])),
+    sabotages: new Map(def.sabotages.map((s) => [s.kind, s])),
     roomAt,
     isWalkable: (x, y) => walk(Math.floor(x / CELL), Math.floor(y / CELL)),
   };

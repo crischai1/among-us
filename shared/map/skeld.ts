@@ -1,8 +1,8 @@
-import type { MapDef, StationDef, StationKind } from './types';
+import { sab } from '../rules/sabotage';
+import { ids, recipe, st } from './build';
+import type { MapDef } from './types';
 
-const st = (kind: StationKind, room: string, x: number, y: number, id = `${kind}:${room}`): StationDef => ({
-  id, kind, room, x, y,
-});
+const WIRES = ids('wires', ['electrical', 'storage', 'admin', 'navigation', 'cafeteria', 'security']);
 
 /**
  * The ship. An original layout following the classic topology: engines,
@@ -11,6 +11,8 @@ const st = (kind: StationKind, room: string, x: number, y: number, id = `${kind}
  */
 export const SKELD: MapDef = {
   id: 'skeld',
+  name: 'The Skeld',
+  theme: { void: '#07090f', hall: 'metal' },
   size: { w: 3300, h: 2000 },
   rooms: [
     { id: 'upperEngine', name: 'Upper Engine', rects: [{ x: 200, y: 120, w: 400, h: 400 }], floor: 'metal' },
@@ -26,7 +28,18 @@ export const SKELD: MapDef = {
     { id: 'comms', name: 'Communications', rects: [{ x: 2050, y: 1680, w: 350, h: 270 }], floor: 'grate' },
     { id: 'storage', name: 'Storage', rects: [{ x: 1500, y: 1100, w: 450, h: 650 }], floor: 'metal' },
     { id: 'admin', name: 'Admin', rects: [{ x: 2050, y: 920, w: 350, h: 300 }], floor: 'carpet' },
-    { id: 'electrical', name: 'Electrical', rects: [{ x: 1000, y: 1100, w: 350, h: 300 }], floor: 'grate' },
+    {
+      // Tall room that steps in twice down its right side, with a cabinet
+      // island on the left wall and a narrow entry passage down to the lower hall.
+      id: 'electrical',
+      name: 'Electrical',
+      rects: [
+        { x: 1000, y: 1060, w: 310, h: 250 }, // middle, around the island (first: map labels and /tp use it)
+        { x: 1000, y: 940, w: 410, h: 120 }, // top wall panels
+        { x: 1000, y: 1310, w: 120, h: 140 }, // entry passage
+      ],
+      floor: 'grate',
+    },
   ],
   halls: [
     { x: 600, y: 300, w: 700, h: 130 }, // upper hall
@@ -35,7 +48,6 @@ export const SKELD: MapDef = {
     { x: 300, y: 850, w: 100, h: 120 }, // reactor mouth
     { x: 530, y: 860, w: 80, h: 110 }, // security mouth
     { x: 600, y: 1450, w: 900, h: 130 }, // lower hall
-    { x: 1100, y: 1400, w: 130, h: 50 }, // electrical mouth
     { x: 1650, y: 700, w: 130, h: 400 }, // cafeteria -> storage
     { x: 1780, y: 940, w: 270, h: 120 }, // admin hall
     { x: 2100, y: 250, w: 250, h: 130 }, // weapons hall
@@ -64,6 +76,7 @@ export const SKELD: MapDef = {
     { circle: { x: 2600, y: 330, r: 30 }, blocksVision: false, prop: 'chair' },
     { rect: { x: 2150, y: 1905, w: 180, h: 45 }, blocksVision: false, prop: 'desk' },
     { rect: { x: 2280, y: 680, w: 70, h: 50 }, blocksVision: false, prop: 'box' },
+    { rect: { x: 1000, y: 1070, w: 200, h: 100 }, blocksVision: true, prop: 'cabinets' },
   ],
   doors: [
     { id: 'cafe-w', room: 'cafeteria', seg: { x1: 1300, y1: 300, x2: 1300, y2: 430 } },
@@ -71,7 +84,7 @@ export const SKELD: MapDef = {
     { id: 'cafe-e', room: 'cafeteria', seg: { x1: 2100, y1: 250, x2: 2100, y2: 380 } },
     { id: 'medbay-n', room: 'medbay', seg: { x1: 1000, y1: 520, x2: 1130, y2: 520 } },
     { id: 'security-w', room: 'security', seg: { x1: 610, y1: 860, x2: 610, y2: 970 } },
-    { id: 'elec-s', room: 'electrical', seg: { x1: 1100, y1: 1400, x2: 1230, y2: 1400 } },
+    { id: 'elec-s', room: 'electrical', seg: { x1: 1000, y1: 1450, x2: 1120, y2: 1450 } },
     { id: 'storage-w', room: 'storage', seg: { x1: 1500, y1: 1450, x2: 1500, y2: 1580 } },
     { id: 'storage-n', room: 'storage', seg: { x1: 1650, y1: 1100, x2: 1780, y2: 1100 } },
     { id: 'storage-e', room: 'storage', seg: { x1: 1950, y1: 1450, x2: 1950, y2: 1580 } },
@@ -87,7 +100,7 @@ export const SKELD: MapDef = {
     { id: 'v-le', room: 'lowerEngine', x: 555, y: 1345, links: ['v-reactor-bottom'] },
     { id: 'v-medbay', room: 'medbay', x: 945, y: 570, links: ['v-security', 'v-elec'] },
     { id: 'v-security', room: 'security', x: 800, y: 1020, links: ['v-medbay', 'v-elec'] },
-    { id: 'v-elec', room: 'electrical', x: 1310, y: 1360, links: ['v-medbay', 'v-security'] },
+    { id: 'v-elec', room: 'electrical', x: 1045, y: 1035, links: ['v-medbay', 'v-security'] },
     { id: 'v-cafe', room: 'cafeteria', x: 2050, y: 130, links: ['v-admin', 'v-hall'] },
     { id: 'v-admin', room: 'admin', x: 2200, y: 1180, links: ['v-cafe', 'v-hall'] },
     { id: 'v-hall', room: 'shields', x: 2760, y: 1460, links: ['v-cafe', 'v-admin'] },
@@ -102,14 +115,14 @@ export const SKELD: MapDef = {
     st('admin', 'admin', 2225, 1070),
     st('vitals', 'medbay', 1225, 800),
     // Sabotage fixes
-    st('lights', 'electrical', 1030, 1290),
-    st('reactor', 'reactor', 170, 750, 'reactor:top'),
-    st('reactor', 'reactor', 170, 1070, 'reactor:bottom'),
+    st('lights', 'electrical', 1040, 1190),
+    st('reactor', 'reactor', 170, 750, { id: 'reactor:top' }),
+    st('reactor', 'reactor', 170, 1070, { id: 'reactor:bottom' }),
     st('o2', 'o2', 2420, 605),
     st('o2', 'admin', 2375, 950),
     st('comms', 'comms', 2375, 1790),
     // Wiring
-    st('wires', 'electrical', 1030, 1130),
+    st('wires', 'electrical', 1210, 955),
     st('wires', 'storage', 1530, 1130),
     st('wires', 'admin', 2080, 950),
     st('wires', 'navigation', 3220, 790),
@@ -117,8 +130,8 @@ export const SKELD: MapDef = {
     st('wires', 'security', 635, 1035),
     // Other tasks
     st('swipe', 'admin', 2370, 1190),
-    st('calibrate', 'electrical', 1320, 1130),
-    st('divert', 'electrical', 1180, 1125),
+    st('calibrate', 'electrical', 1370, 960),
+    st('divert', 'electrical', 1130, 955, { main: true }),
     st('divert', 'weapons', 2720, 450),
     st('divert', 'o2', 2230, 610),
     st('divert', 'navigation', 3220, 1110),
@@ -131,12 +144,12 @@ export const SKELD: MapDef = {
     st('transfer', 'weapons', 2380, 450),
     st('transfer', 'navigation', 3100, 1125),
     st('transfer', 'comms', 2080, 1920),
-    st('transfer', 'electrical', 1320, 1250),
+    st('transfer', 'electrical', 1040, 955),
     st('transfer', 'admin', 2080, 1190),
     st('align', 'upperEngine', 230, 480),
     st('align', 'lowerEngine', 230, 1340),
     st('steering', 'navigation', 3160, 950),
-    st('fuel', 'storage', 1920, 1720),
+    st('fuel', 'storage', 1920, 1720, { main: true }),
     st('fuel', 'upperEngine', 555, 150),
     st('fuel', 'lowerEngine', 555, 1670),
     st('asteroids', 'weapons', 2550, 150),
@@ -154,4 +167,24 @@ export const SKELD: MapDef = {
   ],
   button: { x: 1700, y: 390 },
   spawn: { x: 1700, y: 390, r: 150 },
+  sabotages: [
+    sab('lights', 'electrical', ['lights:electrical']),
+    sab('reactor', 'reactor', ['reactor:top', 'reactor:bottom']),
+    sab('o2', 'o2', ['o2:o2', 'o2:admin']),
+    sab('comms', 'comms', ['comms:comms']),
+  ],
+  tasks: [
+    recipe('wires', 'common', [WIRES, WIRES, WIRES]),
+    recipe('swipe', 'common', [['swipe:admin']]),
+    recipe('calibrate', 'short', [['calibrate:electrical']]),
+    recipe('divert', 'short', [['divert:electrical'], ids('divert', ['weapons', 'o2', 'navigation', 'shields', 'comms', 'upperEngine', 'lowerEngine', 'security'])]),
+    recipe('transfer', 'short', [ids('transfer', ['cafeteria', 'weapons', 'navigation', 'comms', 'electrical']), ['transfer:admin']]),
+    recipe('align', 'short', [['align:upperEngine'], ['align:lowerEngine']]),
+    recipe('steering', 'short', [['steering:navigation']]),
+    recipe('fuel', 'long', [['fuel:storage'], ids('fuel', ['upperEngine', 'lowerEngine'])]),
+    recipe('asteroids', 'long', [['asteroids:weapons']]),
+    recipe('garbage', 'long', [ids('garbage', ['cafeteria', 'o2']), ['garbage:storage']]),
+    recipe('scan', 'long', [['scan:medbay']]),
+    recipe('simon', 'long', [['simon:reactor']]),
+  ],
 };

@@ -1,6 +1,6 @@
 import { LIGHTS_FADE_MS, LIGHTS_VISION_FACTOR, TICK_MS, VISION_BASE } from '../../shared/constants';
 import { clamp, dist, lerp } from '../../shared/geom';
-import { CRITICAL_SABOTAGES, F_GHOST, isImpostorRole } from '../../shared/types';
+import { F_GHOST, isImpostorRole } from '../../shared/types';
 import { doorSegs, stepPlayer } from '../../shared/sim/movement';
 import { computeVisibility, hasLineOfSight } from '../../shared/sim/visibility';
 import { moveInput } from '../input/keyboard';
@@ -13,10 +13,9 @@ import { easeAmp, jitter, moveCtx, updateEnts, WALK_RATE, world } from '../world
 import { drawDebug, debugEnabled, debugState } from './debug';
 import { drawFog } from './fog';
 import { drawHighlight, drawStationMarks, type StationMarks } from './props';
-import { SABOTAGE_STATIONS } from '../../shared/rules/sabotage';
 import { TASK_THEME } from '../tasks/theme';
 import { drawSceneEntities, drawSceneFloor, drawSceneTop, drawTags, type Look } from './scene';
-import { VOID, wallsPath } from './mapLayer';
+import { wallsPath } from './mapLayer';
 
 // The running loop keeps references to render functions, so hot-swapping any
 // render module would leave stale drawing code on screen: reload instead.
@@ -24,6 +23,8 @@ if (import.meta.hot) import.meta.hot.accept(() => location.reload());
 
 /** World units visible vertically. */
 const VIEW_HEIGHT = 720;
+/** Badge icons for consoles, shown like task markers. */
+const CONSOLE_ICON = { cams: '📹', admin: '🗺️', vitals: '💓' } as const;
 
 export const camera = { x: 0, y: 0, zoom: 1, dpr: 1 };
 
@@ -139,7 +140,7 @@ export function startLoop(canvas: HTMLCanvasElement): () => void {
     const H = canvas.height;
 
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.fillStyle = VOID;
+    ctx.fillStyle = world.map.def.theme.void;
     ctx.fillRect(0, 0, W, H);
     drawStars(ctx, W, H, camera.x, camera.y, k);
     if (!s.ready) return;
@@ -165,15 +166,27 @@ export function startLoop(canvas: HTMLCanvasElement): () => void {
       return hasLineOfSight(s.x, s.y, x, y - 12, map.visionGrid, doors) || hasLineOfSight(s.x, s.y, x, y - 34, map.visionGrid, doors);
     };
 
-    const marks: StationMarks = { tasks: new Map(), sabotage: new Set(), inRange: null };
+    const marks: StationMarks = { tasks: new Map(), sabotage: new Set(), consoles: new Map(), inRange: null };
     if (inGame && priv && pub?.phase === 'playing' && !priv.venting) {
       if (!isImpostorRole(priv.role)) for (const tk of priv.tasks) if (!tk.done) marks.tasks.set(tk.stationId, TASK_THEME[tk.type].icon);
-      if (!ghost && pub.sabotage) for (const id of SABOTAGE_STATIONS[pub.sabotage.kind]) marks.sabotage.add(id);
+      if (!ghost && pub.sabotage) for (const id of pub.sabotage.stations) marks.sabotage.add(id);
+      if (!ghost) {
+        for (const st of map.def.stations) {
+          const icon = CONSOLE_ICON[st.kind as keyof typeof CONSOLE_ICON];
+          // Comms sabotage knocks out cameras and admin, so they aren't usable then.
+          if (icon && (st.kind === 'vitals' || !priv.commsDown)) marks.consoles.set(st.id, icon);
+        }
+      }
       if (nearby.use && (nearby.use.kind === 'task' || nearby.use.kind === 'fix')) marks.inRange = nearby.use.id;
+      if (nearby.use?.kind === 'console') {
+        const kind = nearby.use.id;
+        const st = map.def.stations.filter((x) => x.kind === kind).sort((a, b) => dist(s.x, s.y, a.x, a.y) - dist(s.x, s.y, b.x, b.y))[0];
+        if (st) marks.inRange = st.id;
+      }
     }
     drawSceneFloor(ctx, map, t, nearby.vent);
-    if (nearby.use && nearby.use.kind !== 'task' && nearby.use.kind !== 'fix') {
-      const st = nearby.use.kind === 'button' ? map.def.button : nearby.use.kind === 'console' ? map.def.stations.find((x) => x.kind === nearby.use!.id) : map.stations.get(nearby.use.id);
+    if (nearby.use && nearby.use.kind !== 'task' && nearby.use.kind !== 'fix' && nearby.use.kind !== 'console') {
+      const st = nearby.use.kind === 'button' ? map.def.button : map.stations.get(nearby.use.id);
       if (st) drawHighlight(ctx, st.x, st.y, nearby.use.kind === 'button' ? 30 : 22, t);
     }
 
@@ -214,21 +227,12 @@ export function startLoop(canvas: HTMLCanvasElement): () => void {
       fade: fogOn ? (x, y) => clamp((radius - dist(s.x, s.y, x, y)) / (radius * 0.22) + 0.15, 0, 1) : undefined,
       ventHighlight: nearby.vent,
       camsInUse: !!pub?.camsInUse,
+      killTarget: priv && isImpostorRole(priv.role) && now >= priv.killReadyAt ? nearby.kill : null,
       names: true,
     });
     drawTags(ctx, tags);
     if (debugEnabled) drawDebug(ctx, map, t);
 
-    // Critical sabotage alarm
-    if (inGame && pub?.sabotage && CRITICAL_SABOTAGES.includes(pub.sabotage.kind) && pub.phase === 'playing') {
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-      const a = 0.12 + Math.sin(t / 220) * 0.1;
-      const g = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.3, W / 2, H / 2, Math.max(W, H) * 0.7);
-      g.addColorStop(0, 'rgba(255,0,0,0)');
-      g.addColorStop(1, `rgba(255,0,0,${a + 0.25})`);
-      ctx.fillStyle = g;
-      ctx.fillRect(0, 0, W, H);
-    }
   };
   raf = requestAnimationFrame(frame);
   return () => {

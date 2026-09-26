@@ -4,7 +4,7 @@ A browser-based Among Us clone with real-time online multiplayer. Everything is 
 
 - **Online rooms:** 6-letter room codes and invite links (`?room=CODE`), up to 15 players, up to 3 impostors.
 - **Roles:** Crewmate and Impostor, plus optional Engineer (vents), Scientist (portable vitals) and Shapeshifter.
-- **Map:** one ship with 14 rooms, hallways, doors, 4 vent networks, 4 security cameras, and admin and vitals consoles.
+- **Map:** The Skeld, with 14 rooms, hallways, doors, 4 vent networks, 4 security cameras, and admin and vitals consoles. The map file (`shared/map/skeld.ts`) lists its sabotages and task recipes (one station pool per task step) alongside the layout.
 - **Tasks:** 12 mini-games — Fix Wiring, Swipe Card, Calibrate Distributor, Divert Power, Download/Upload Data, Align Engine, Stabilize Steering, Fuel Engines, Clear Asteroids, Empty Garbage, Submit Scan and Start Reactor.
 - **Sabotage:** Lights, Reactor, O2, Comms, and Doors.
 - **Meetings:** emergency button and body reports, discussion and voting timers, meeting chat and ghost-only chat, skip votes, anonymous votes, confirm ejects.

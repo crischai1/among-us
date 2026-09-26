@@ -7,7 +7,6 @@ import { getShip, spawnPoint, type CompiledMap } from '../../shared/map';
 import type { ServerMessage } from '../../shared/protocol';
 import { makeRng, shuffle, type Rng } from '../../shared/rng';
 import { assignRoles } from '../../shared/rules/roles';
-import { SABOTAGE_STATIONS } from '../../shared/rules/sabotage';
 import { assignTasks } from '../../shared/rules/tasks';
 import { tallyVotes } from '../../shared/rules/voting';
 import { checkWin } from '../../shared/rules/win';
@@ -88,7 +87,7 @@ export class Game {
     const ids = opts.players.map((p) => p.id);
     const roles = assignRoles(ids, this.settings, this.rng, opts.forcedRoles);
     const impostors = new Set(ids.filter((id) => isImpostorRole(roles[id])));
-    const tasks = assignTasks(ids, impostors, this.settings, this.rng);
+    const tasks = assignTasks(ids, impostors, this.settings, this.rng, this.map.def);
     const eids = shuffle(this.rng, ids.map((_, i) => 10 + i * 7 + Math.floor(this.rng() * 5)));
 
     opts.players.forEach((init, i) => {
@@ -117,6 +116,7 @@ export class Game {
         ventEndsAt: null,
         openStation: null,
         console: null,
+        consoleSeq: 0,
         battery: role === 'scientist' ? { leftMs: this.settings.scientistBattery * 1000, readyAt: 0, open: false } : null,
         shift: role === 'shapeshifter' ? { as: null, endsAt: 0, readyAt: opts.now + REVEAL_MS + 10_000 } : null,
         vote: null,
@@ -287,7 +287,7 @@ export class Game {
     const segs = moving ? this.closedDoorSegs() : [];
     for (const p of this.players) {
       if (p.removed) continue;
-      if (!moving || p.venting || p.openStation || p.console || !p.connected) {
+      if (!moving || p.venting || !p.connected) {
         // Acknowledge but ignore movement while frozen.
         if (p.inputs.length) {
           p.lastSeq = p.inputs[p.inputs.length - 1].seq;
@@ -296,6 +296,19 @@ export class Game {
         continue;
       }
       for (const inp of takeInputs(p)) {
+        // A panel (task, fix, console) holds the player still. Inputs sent before it
+        // opened still apply. The client never sends movement while a panel is open,
+        // so a real move sent after opening means its panel is gone: close ours too,
+        // rather than freezing the player on a desync.
+        const lock = p.openStation ? p.openStation.seq : p.console ? p.consoleSeq : null;
+        if (lock !== null && inp.seq > lock) {
+          if (inp.dx === 0 && inp.dy === 0) {
+            p.lastSeq = inp.seq;
+            continue;
+          }
+          this.releasePanels(p);
+          this.markPub();
+        }
         stepPlayer(p, inp.dx, inp.dy, {
           map: this.map,
           doors: segs,
@@ -597,8 +610,8 @@ export class Game {
     this.privDirty.clear();
   }
 
-  /** Sabotage fix stations that a player's open panel belongs to. */
-  static isSabotageStation(id: string): boolean {
-    return Object.values(SABOTAGE_STATIONS).some((ids) => ids.includes(id));
+  /** Whether a station is a sabotage fix panel (as opposed to a task). */
+  isSabotageStation(id: string): boolean {
+    return [...this.map.sabotages.values()].some((s) => s.stations.includes(id));
   }
 }

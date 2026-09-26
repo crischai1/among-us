@@ -19,6 +19,8 @@ export function MeetingScreen() {
   const left = Math.max(0, Math.ceil((m.endsAt - now) / 1000));
   const res = m.results;
   const voted = new Set(m.votedIds);
+  // Only impostors are sent their team, so crewmates never see red names.
+  const team = new Set(priv.team);
   const players = [...pub.players].filter((p) => !p.disconnected || !p.dead);
   players.sort((a, b) => Number(a.dead) - Number(b.dead));
 
@@ -53,7 +55,7 @@ export function MeetingScreen() {
                   onClick={() => selectable && setPending(pending === p.id ? null : p.id)}
                 >
                   <CrewmateSvg color={p.color} size={40} dead={p.dead} />
-                  <div className="vote-name">
+                  <div className={`vote-name ${team.has(p.id) ? 'imp' : ''}`}>
                     {p.name}
                     {p.id === selfId && ' (you)'}
                   </div>

@@ -1,16 +1,11 @@
 import { O2_MS, REACTOR_MS } from '../constants';
+import type { SabotageDef } from '../map/types';
 import type { Rng } from '../rng';
 import type { SabotageKind, SabotageState } from '../types';
 
 export const LIGHT_SWITCHES = 5;
 
-export const SABOTAGE_STATIONS: Record<SabotageKind, string[]> = {
-  lights: ['lights:electrical'],
-  reactor: ['reactor:top', 'reactor:bottom'],
-  o2: ['o2:o2', 'o2:admin'],
-  comms: ['comms:comms'],
-};
-
+/** Default names and icons; a map can rename them. */
 export const SABOTAGE_LABEL: Record<SabotageKind, string> = {
   lights: 'Fix Lights',
   reactor: 'Reactor Meltdown',
@@ -18,14 +13,28 @@ export const SABOTAGE_LABEL: Record<SabotageKind, string> = {
   comms: 'Comms Sabotaged',
 };
 
-export function newSabotage(kind: SabotageKind, now: number, rng: Rng): SabotageState {
+export const SABOTAGE_ICON: Record<SabotageKind, string> = {
+  lights: '💡',
+  reactor: '☢',
+  o2: '🫧',
+  comms: '📡',
+};
+
+/** Shorthand for map files: a sabotage with its default name and icon. */
+export const sab = (kind: SabotageKind, room: string, stations: string[], extra: Partial<SabotageDef> = {}): SabotageDef => ({
+  kind, room, stations, label: SABOTAGE_LABEL[kind], icon: SABOTAGE_ICON[kind], ...extra,
+});
+
+export function newSabotage(def: SabotageDef, now: number, rng: Rng): SabotageState {
+  const { kind } = def;
   let lights: boolean[] | null = null;
   if (kind === 'lights') {
     lights = Array.from({ length: LIGHT_SWITCHES }, () => rng() < 0.5);
     lights[Math.floor(rng() * LIGHT_SWITCHES)] = false;
   }
-  const endsAt = kind === 'reactor' ? now + REACTOR_MS : kind === 'o2' ? now + O2_MS : null;
-  return { kind, startedAt: now, endsAt, lights, reactorHeld: [], o2Done: [] };
+  const ms = def.ms ?? (kind === 'reactor' ? REACTOR_MS : kind === 'o2' ? O2_MS : 0);
+  const endsAt = kind === 'reactor' || kind === 'o2' ? now + ms : null;
+  return { kind, label: def.label, stations: [...def.stations], startedAt: now, endsAt, lights, reactorHeld: [], o2Done: [] };
 }
 
 export function makeO2Code(rng: Rng): string {
@@ -45,7 +54,7 @@ export function applyFix(
   data: number | boolean | string,
   ctx: { o2Code: string; held?: string[] },
 ): boolean {
-  if (!SABOTAGE_STATIONS[s.kind].includes(stationId)) return false;
+  if (!s.stations.includes(stationId)) return false;
   switch (s.kind) {
     case 'lights': {
       if (typeof data !== 'number' || !s.lights || data < 0 || data >= s.lights.length) return false;
@@ -54,10 +63,10 @@ export function applyFix(
     }
     case 'reactor':
       s.reactorHeld = ctx.held ?? s.reactorHeld;
-      return SABOTAGE_STATIONS.reactor.every((id) => s.reactorHeld.includes(id));
+      return s.stations.every((id) => s.reactorHeld.includes(id));
     case 'o2':
       if (data === ctx.o2Code && !s.o2Done.includes(stationId)) s.o2Done.push(stationId);
-      return SABOTAGE_STATIONS.o2.every((id) => s.o2Done.includes(id));
+      return s.stations.every((id) => s.o2Done.includes(id));
     case 'comms':
       return data === 'tuned';
   }

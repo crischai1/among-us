@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { SABOTAGE_LABEL } from '../../shared/rules/sabotage';
 import { CRITICAL_SABOTAGES, isImpostorRole, ROLE_LABEL } from '../../shared/types';
 import { canPressButton, doKill, doReport, doUse, doVent, openOverlay, toggleMap } from '../game/actions';
 import { lastRtt, serverNow } from '../net/clock';
@@ -40,6 +39,7 @@ export function GameHud() {
         <>
           <TaskPanel dead={dead} />
           <SabotageBanner />
+          <CriticalFlash />
           <TopRight dead={dead} />
           <ActionButtons dead={dead} />
           {priv.venting && <VentArrows />}
@@ -81,10 +81,10 @@ function TaskPanel({ dead }: { dead: boolean }) {
             {dead && <div className="ghost-line">{imp ? 'You are dead. You can still sabotage.' : 'You are dead. Finish your tasks to help your crew win.'}</div>}
             {sab && (
               <div className="task sab">
-                {SABOTAGE_LABEL[sab.kind]}
+                {sab.label}
                 {sab.endsAt && ` ${secs(sab.endsAt - now)}s`}
-                {sab.kind === 'reactor' && ` (${sab.reactorHeld.length}/2)`}
-                {sab.kind === 'o2' && ` (${sab.o2Done.length}/2)`}
+                {sab.kind === 'reactor' && ` (${sab.reactorHeld.length}/${sab.stations.length})`}
+                {sab.kind === 'o2' && ` (${sab.o2Done.length}/${sab.stations.length})`}
               </div>
             )}
             {priv.commsDown && !imp ? (
@@ -112,13 +112,19 @@ function TaskPanel({ dead }: { dead: boolean }) {
   );
 }
 
+/** Red alarm flash over the whole screen while a critical sabotage counts down. */
+function CriticalFlash() {
+  const critical = useGame((s) => s.pub?.phase === 'playing' && !!s.pub.sabotage && CRITICAL_SABOTAGES.includes(s.pub.sabotage.kind));
+  return critical ? <div className="crit-flash" aria-hidden /> : null;
+}
+
 function SabotageBanner() {
   const sab = useGame((s) => s.pub?.sabotage);
   const now = useNow(250);
   if (!sab || !CRITICAL_SABOTAGES.includes(sab.kind) || !sab.endsAt) return null;
   return (
     <div className="sab-banner outline-text">
-      {SABOTAGE_LABEL[sab.kind]} in {secs(sab.endsAt - now)}
+      {sab.label} in {secs(sab.endsAt - now)}
     </div>
   );
 }
@@ -248,7 +254,7 @@ function ActionButtons({ dead }: { dead: boolean }) {
       )}
       {!dead && <ActionButton label="REPORT" icon="📢" hotkey="R" className="report" enabled={nearby.report !== null} onClick={doReport} />}
       <ActionButton
-        label={use ? use.label.toUpperCase() : 'USE'}
+        label={use?.kind === 'button' && pub.sabotage ? 'LOCKED' : use ? use.label.toUpperCase() : 'USE'}
         icon={use?.kind === 'button' ? '🔴' : '✋'}
         hotkey="E"
         className="use"

@@ -32,8 +32,11 @@ export interface SPlayer extends InputQueue {
   venting: string | null;
   ventReadyAt: number;
   ventEndsAt: number | null;
-  openStation: { id: string; at: number } | null;
+  /** Open task/fix panel; `seq` = last input the client had sent when it opened. */
+  openStation: { id: string; at: number; seq: number } | null;
   console: ConsoleKind | null;
+  /** Last input seq when the console opened. */
+  consoleSeq: number;
   battery: { leftMs: number; readyAt: number; open: boolean } | null;
   shift: { as: string | null; endsAt: number; readyAt: number } | null;
   vote: string | null;
@@ -47,6 +50,8 @@ export interface Body {
   y: number;
   color: number;
   victimId: string;
+  /** Server time of the kill. */
+  at: number;
 }
 
 export interface Meeting {
@@ -88,6 +93,11 @@ export function takeInputs(p: InputQueue): Input[] {
 }
 
 /** Validate and enqueue an input. Returns false if rejected. */
+/** Newest input seq received from this player (queued or applied). */
+export function latestSeq(p: { inputs: Input[]; lastSeq: number }): number {
+  return p.inputs.length ? p.inputs[p.inputs.length - 1].seq : p.lastSeq;
+}
+
 export function queueInput(p: { inputs: Input[]; lastSeq: number }, seq: unknown, dx: unknown, dy: unknown): boolean {
   if (typeof seq !== 'number' || !Number.isInteger(seq)) return false;
   if (dx !== -1 && dx !== 0 && dx !== 1) return false;

@@ -1,10 +1,21 @@
 import { useRef, useState } from 'react';
+import { world } from '../../world/world';
 import { svgPoint, type TaskGameProps } from '../types';
 
-const ROOMS = ['weapons', 'o2', 'navigation', 'shields', 'comms', 'upperEngine', 'lowerEngine', 'security'];
+/** The Skeld's targets, for tasks issued without a target list. */
+const SKELD_ROOMS = ['weapons', 'o2', 'navigation', 'shields', 'comms', 'upperEngine', 'lowerEngine', 'security'];
 const SHORT: Record<string, string> = {
   weapons: 'WPN', o2: 'O2', navigation: 'NAV', shields: 'SHD', comms: 'COM', upperEngine: 'U.E', lowerEngine: 'L.E', security: 'SEC',
 };
+
+/** Three-letter slider label: "Upper Engine" -> "U.E", "Greenhouse" -> "GRE". */
+function shortName(room: string): string {
+  if (SHORT[room]) return SHORT[room];
+  const name = world.map.rooms.get(room)?.name ?? room;
+  const words = name.split(/\s+/).filter((w) => w.length > 2 || /^[A-Z0-9]+$/.test(w));
+  if (words.length > 1) return words.slice(0, 3).map((w) => w[0].toUpperCase()).join('.');
+  return name.replace(/[^A-Za-z0-9]/g, '').slice(0, 3).toUpperCase();
+}
 
 export function DivertPower({ step, params, onComplete }: TaskGameProps) {
   const target = String(params.target);
@@ -32,7 +43,9 @@ export function DivertPower({ step, params, onComplete }: TaskGameProps) {
     );
   }
 
+  const ROOMS = typeof params.targets === 'string' && params.targets ? params.targets.split(',') : SKELD_ROOMS;
   const idx = ROOMS.indexOf(target);
+  const gap = Math.min(46, 340 / ROOMS.length);
   return (
     <svg
       ref={svgRef}
@@ -54,7 +67,7 @@ export function DivertPower({ step, params, onComplete }: TaskGameProps) {
     >
       <rect width="400" height="300" rx="10" fill="#2a2f37" />
       {ROOMS.map((r, i) => {
-        const x = 30 + i * 46;
+        const x = 200 - (gap * (ROOMS.length - 1)) / 2 - 13 + i * gap;
         const isT = i === idx;
         const y = isT ? 250 - level * 190 : 60;
         return (
@@ -65,13 +78,13 @@ export function DivertPower({ step, params, onComplete }: TaskGameProps) {
               <rect x={x} y={y - 8} width="26" height="16" rx="3" fill={isT ? '#ffe56b' : '#9aa3ad'} stroke="#000" strokeWidth="2" />
             </g>
             <text x={x + 13} y="280" textAnchor="middle" fill={isT ? '#ffe56b' : '#9aa3ad'} fontSize="11" fontWeight="bold">
-              {SHORT[r]}
+              {shortName(r)}
             </text>
           </g>
         );
       })}
       <text x="200" y="30" textAnchor="middle" fill="#ddd" fontSize="14">
-        Divert power to {SHORT[target]}
+        Divert power to {shortName(target)}
       </text>
     </svg>
   );

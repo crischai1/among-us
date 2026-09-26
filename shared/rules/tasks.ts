@@ -1,4 +1,5 @@
 import type { CompiledMap } from '../map/compile';
+import type { MapDef, TaskRecipe } from '../map/types';
 import { pick, shuffle, type Rng } from '../rng';
 import type { GameSettings } from '../settings';
 import type { TaskCategory, TaskType, TaskView } from '../types';
@@ -26,14 +27,6 @@ export const TASK_DEFS: Record<TaskType, TaskDef> = {
   simon: { type: 'simon', category: 'long', name: 'Start Reactor', minMs: [3000] },
 };
 
-export const COMMON_POOL: TaskType[] = ['wires', 'swipe'];
-export const SHORT_POOL: TaskType[] = ['calibrate', 'divert', 'transfer', 'align', 'steering'];
-export const LONG_POOL: TaskType[] = ['fuel', 'asteroids', 'garbage', 'scan', 'simon'];
-
-export const WIRE_ROOMS = ['electrical', 'storage', 'admin', 'navigation', 'cafeteria', 'security'];
-export const DIVERT_TARGETS = ['weapons', 'o2', 'navigation', 'shields', 'comms', 'upperEngine', 'lowerEngine', 'security'];
-export const DOWNLOAD_ROOMS = ['cafeteria', 'weapons', 'navigation', 'comms', 'electrical'];
-
 export interface TaskInst {
   id: string;
   type: TaskType;
@@ -46,61 +39,38 @@ export interface TaskInst {
   fake: boolean;
 }
 
-function makeTask(type: TaskType, rng: Rng, idx: number, fake: boolean): TaskInst {
-  const def = TASK_DEFS[type];
-  let stations: string[];
+function makeTask(recipe: TaskRecipe, map: MapDef, rng: Rng, idx: number, fake: boolean): TaskInst {
   const params: Record<string, string | number> = { seed: Math.floor(rng() * 1e9) };
-  switch (type) {
-    case 'wires': {
-      const rooms = shuffle(rng, WIRE_ROOMS).slice(0, 3);
-      stations = rooms.map((r) => `wires:${r}`);
-      break;
-    }
-    case 'divert': {
-      const target = pick(rng, DIVERT_TARGETS);
-      params.target = target;
-      stations = ['divert:electrical', `divert:${target}`];
-      break;
-    }
-    case 'transfer': {
-      const from = pick(rng, DOWNLOAD_ROOMS);
-      params.from = from;
-      stations = [`transfer:${from}`, 'transfer:admin'];
-      break;
-    }
-    case 'align':
-      stations = ['align:upperEngine', 'align:lowerEngine'];
-      break;
-    case 'fuel':
-      stations = ['fuel:storage', `fuel:${pick(rng, ['upperEngine', 'lowerEngine'])}`];
-      break;
-    case 'garbage':
-      stations = [`garbage:${pick(rng, ['cafeteria', 'o2'])}`, 'garbage:storage'];
-      break;
-    default: {
-      const room = { swipe: 'admin', calibrate: 'electrical', steering: 'navigation', asteroids: 'weapons', scan: 'medbay', simon: 'reactor' }[
-        type as 'swipe'
-      ];
-      stations = [`${type}:${room}`];
-    }
+  const stations: string[] = [];
+  for (const pool of recipe.steps) {
+    const free = pool.filter((id) => !stations.includes(id));
+    stations.push(free.length === 1 ? free[0] : pick(rng, free));
   }
-  return { id: `t${idx}-${type}`, type, category: def.category, stations, step: 0, done: false, params, fake };
+  const roomOf = (id: string) => map.stations.find((s) => s.id === id)?.room ?? '';
+  if (recipe.type === 'divert') {
+    params.target = roomOf(stations[1]);
+    params.targets = recipe.steps[1].map(roomOf).join(',');
+  }
+  if (recipe.type === 'transfer') params.from = roomOf(stations[0]);
+  return { id: `t${idx}-${recipe.type}`, type: recipe.type, category: recipe.category, stations, step: 0, done: false, params, fake };
 }
 
 /**
  * Commons are identical for everyone; short and long tasks are drawn per
  * player. Impostors get a fake list of the same shape.
  */
-export function assignTasks(ids: string[], impostorIds: Set<string>, settings: GameSettings, rng: Rng): Map<string, TaskInst[]> {
-  const commonTypes = shuffle(rng, COMMON_POOL).slice(0, settings.commonTasks);
-  const commons = commonTypes.map((t, i) => makeTask(t, rng, i, false));
+export function assignTasks(ids: string[], impostorIds: Set<string>, settings: GameSettings, rng: Rng, map: MapDef): Map<string, TaskInst[]> {
+  const pool = (c: TaskCategory) => map.tasks.filter((r) => r.category === c);
+  const commons = shuffle(rng, pool('common'))
+    .slice(0, settings.commonTasks)
+    .map((r, i) => makeTask(r, map, rng, i, false));
   const out = new Map<string, TaskInst[]>();
   for (const id of ids) {
     const fake = impostorIds.has(id);
     const list: TaskInst[] = commons.map((c) => ({ ...c, params: { ...c.params }, stations: [...c.stations], fake }));
     let n = list.length;
-    for (const t of shuffle(rng, SHORT_POOL).slice(0, settings.shortTasks)) list.push(makeTask(t, rng, n++, fake));
-    for (const t of shuffle(rng, LONG_POOL).slice(0, settings.longTasks)) list.push(makeTask(t, rng, n++, fake));
+    for (const r of shuffle(rng, pool('short')).slice(0, settings.shortTasks)) list.push(makeTask(r, map, rng, n++, fake));
+    for (const r of shuffle(rng, pool('long')).slice(0, settings.longTasks)) list.push(makeTask(r, map, rng, n++, fake));
     out.set(id, list);
   }
   return out;

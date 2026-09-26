@@ -26,7 +26,9 @@ export function buildPub(g: Game, viewer: SPlayer): PubState {
       disconnected: p.removed || !p.connected,
     })),
     taskBar: g.taskBar(),
-    sabotage: g.sabotage ? { ...g.sabotage, lights: g.sabotage.lights && [...g.sabotage.lights] } : null,
+    sabotage: g.sabotage
+      ? { ...g.sabotage, stations: [...g.sabotage.stations], lights: g.sabotage.lights && [...g.sabotage.lights] }
+      : null,
     doors: Object.fromEntries(g.doors),
     camsInUse: !g.commsDown && g.players.some((p) => p.console === 'cams' && p.connected),
     buttonReadyAt: g.buttonReadyAt,
@@ -85,7 +87,7 @@ export function buildPriv(g: Game, p: SPlayer): PrivState {
     vitals: p.console === 'vitals' || p.battery?.open ? vitals(g) : null,
     battery: p.battery ? { ...p.battery } : null,
     shift: p.shift ? { ...p.shift } : null,
-    o2Code: g.sabotage?.kind === 'o2' && p.openStation?.id.startsWith('o2:') ? g.o2Code : null,
+    o2Code: g.sabotage?.kind === 'o2' && p.openStation && g.sabotage.stations.includes(p.openStation.id) ? g.o2Code : null,
     vote: p.vote,
   };
 }
@@ -115,14 +117,14 @@ export function buildSnap(g: Game, viewer: SPlayer): SnapMessage {
       let flags = 0;
       if (!p.alive) flags |= F_GHOST;
       if (!p.connected) flags |= F_DISCONNECTED;
-      if (p.alive && g.settings.visualTasks && p.openStation?.id.startsWith('scan:')) flags |= F_SCANNING;
+      if (p.alive && g.settings.visualTasks && p.openStation && g.map.stations.get(p.openStation.id)?.kind === 'scan') flags |= F_SCANNING;
       if (viewerImp && g.isImpostor(p)) flags |= F_TEAMMATE;
       const look = p.shift?.as ? g.byId.get(p.shift.as)!.idx : p.idx;
       ents.push([p.eid, r1(p.x), r1(p.y), flags, look]);
     }
   }
   const bodies: BodyTuple[] = playing
-    ? g.bodies.filter((b) => visible(b.x, b.y)).map((b) => [b.id, r1(b.x), r1(b.y), b.color])
+    ? g.bodies.filter((b) => visible(b.x, b.y)).map((b) => [b.id, r1(b.x), r1(b.y), b.color, b.at])
     : [];
 
   return {

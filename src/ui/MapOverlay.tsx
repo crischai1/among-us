@@ -1,6 +1,6 @@
-import { SKELD } from '../../shared/map/skeld';
-import { SABOTAGE_STATIONS } from '../../shared/rules/sabotage';
-import { isImpostorRole, type SabotageKind } from '../../shared/types';
+import { DOOR_COOLDOWN_MS } from '../../shared/constants';
+import type { MapDef } from '../../shared/map/types';
+import { isImpostorRole } from '../../shared/types';
 import { closeOverlay } from '../game/actions';
 import { TASK_THEME } from '../tasks/theme';
 import { send } from '../net/session';
@@ -9,35 +9,38 @@ import { world } from '../world/world';
 import { CrewmateSvg } from './CrewmateSvg';
 import { useNow } from './GameHud';
 
-const SAB_BUTTONS: { kind: SabotageKind; room: string; icon: string; label: string }[] = [
-  { kind: 'lights', room: 'electrical', icon: '💡', label: 'Lights' },
-  { kind: 'reactor', room: 'reactor', icon: '☢', label: 'Reactor' },
-  { kind: 'o2', room: 'o2', icon: '🫧', label: 'O2' },
-  { kind: 'comms', room: 'comms', icon: '📡', label: 'Comms' },
-];
-
-const roomCenter = (id: string) => {
-  const r = SKELD.rooms.find((x) => x.id === id)!.rects[0];
+export const roomCenter = (id: string, def: MapDef = world.map.def) => {
+  const r = def.rooms.find((x) => x.id === id)!.rects[0];
   return { x: r.x + r.w / 2, y: r.y + r.h / 2 };
 };
 
-function ShipSvg({ children }: { children?: React.ReactNode }) {
+/** Markers are sized for the Skeld; bigger maps scale them up to stay readable. */
+export const markScale = (def: MapDef = world.map.def) => Math.max(def.size.w, def.size.h * 1.65) / 3300;
+
+/** Room-and-hall outline of a map (the current one unless `def` is given). */
+export function ShipSvg({ def = world.map.def, children }: { def?: MapDef; children?: React.ReactNode }) {
+  const k = markScale(def);
   return (
-    <svg className="ship-map" viewBox={`-40 -40 ${SKELD.size.w + 80} ${SKELD.size.h + 80}`}>
-      {SKELD.halls.map((h, i) => (
+    <svg className="ship-map" viewBox={`-40 -40 ${def.size.w + 80} ${def.size.h + 80}`}>
+      {def.halls.map((h, i) => (
         <rect key={i} x={h.x} y={h.y} width={h.w} height={h.h} className="map-hall" />
       ))}
-      {SKELD.rooms.map((r) => (
+      {def.rooms.map((r) => (
         <g key={r.id}>
           {r.rects.map((rc, i) => (
-            <rect key={i} x={rc.x} y={rc.y} width={rc.w} height={rc.h} className="map-room" rx={10} />
+            <rect key={i} x={rc.x} y={rc.y} width={rc.w} height={rc.h} className="map-room" rx={r.rects.length > 1 ? 0 : 10} style={r.rects.length > 1 ? { strokeWidth: 16 } : undefined} />
           ))}
+          {/* Areas made of several pieces: fill again over the outlines so the seams between pieces vanish. */}
+          {r.rects.length > 1 &&
+            r.rects.map((rc, i) => (
+              <rect key={`f${i}`} x={rc.x} y={rc.y} width={rc.w} height={rc.h} className="map-room" style={{ stroke: 'none' }} shapeRendering="crispEdges" />
+            ))}
         </g>
       ))}
-      {SKELD.rooms.map((r) => {
-        const c = roomCenter(r.id);
+      {def.rooms.map((r) => {
+        const c = roomCenter(r.id, def);
         return (
-          <text key={r.id} x={c.x} y={c.y} className="map-label">
+          <text key={r.id} x={c.x} y={c.y} className="map-label" style={{ fontSize: 46 * k, strokeWidth: 8 * k }}>
             {r.name}
           </text>
         );
@@ -47,20 +50,57 @@ function ShipSvg({ children }: { children?: React.ReactNode }) {
   );
 }
 
+/**
+ * Grey wedge covering the remaining fraction of a cooldown, clockwise from
+ * 12 o'clock, on a circle of radius r centred at (c, c).
+ */
+function CooldownWedge({ left, c, r }: { left: number; c: number; r: number }) {
+  if (left <= 0) return null;
+  if (left >= 0.999) return <circle cx={c} cy={c} r={r} className="cooldown-wedge" />;
+  const a = left * Math.PI * 2;
+  const x = c + r * Math.sin(a);
+  const y = c - r * Math.cos(a);
+  return <path d={`M ${c} ${c} L ${c} ${c - r} A ${r} ${r} 0 ${left > 0.5 ? 1 : 0} 1 ${x} ${y} Z`} className="cooldown-wedge" />;
+}
+
+/** Door sabotage button: a door with an orange cross; the grey wedge shows the cooldown left. */
+function DoorButton({ room, x, y, scale, readyAt, now }: { room: string; x: number; y: number; scale: number; readyAt: number; now: number }) {
+  const left = Math.min(1, Math.max(0, (readyAt - now) / DOOR_COOLDOWN_MS));
+  const ready = left === 0;
+  const secs = Math.ceil((readyAt - now) / 1000);
+  return (
+    <g
+      className={`map-door-btn ${ready ? '' : 'cooling'}`}
+      transform={`translate(${x - 50 * scale}, ${y - 50 * scale}) scale(${scale})`}
+      onClick={() => ready && send({ t: 'sabotage', kind: 'doors', room })}
+    >
+      <title>{ready ? 'Close doors' : `Doors ready in ${secs}s`}</title>
+      <circle cx={50} cy={50} r={46} className="door-btn-face" />
+      <rect x={31} y={22} width={38} height={58} rx={4} className="door-btn-door" />
+      <circle cx={61} cy={52} r={3} className="door-btn-knob" />
+      <path d="M 30 30 L 70 70 M 70 30 L 30 70" className="door-btn-cross" />
+      <CooldownWedge left={left} c={50} r={46} />
+      <circle cx={50} cy={50} r={46} className="door-btn-rim" />
+    </g>
+  );
+}
+
 function SelfDot() {
   useNow(150);
   const s = world.self;
-  return <circle cx={s.x} cy={s.y} r={26} className="map-self" />;
+  return <circle cx={s.x} cy={s.y} r={26 * markScale()} className="map-self" />;
 }
 
 export function MapOverlay() {
   const pub = useGame((s) => s.pub);
   const priv = useGame((s) => s.priv);
-  const now = useNow(250);
+  const now = useNow(100);
   if (!pub || !priv) return null;
   const imp = isImpostorRole(priv.role);
   const sab = pub.sabotage;
-  const doorRooms = [...new Set(SKELD.doors.map((d) => d.room))];
+  const def = world.map.def;
+  const k = markScale();
+  const doorRooms = [...new Set(def.doors.map((d) => d.room))];
   const sabReady = now >= priv.sabotageReadyAt && !sab;
   const sabCd = Math.max(0, Math.ceil((priv.sabotageReadyAt - now) / 1000));
 
@@ -71,59 +111,48 @@ export function MapOverlay() {
           ✕
         </button>
         <ShipSvg>
-          {!imp &&
-            !priv.commsDown &&
+          {/* Impostors see their fake tasks too, so they know where to pretend. */}
+          {(imp || !priv.commsDown) &&
             priv.tasks
               .filter((t) => !t.done)
               .map((t) => {
                 const st = world.map.stations.get(t.stationId);
                 return st ? (
                   <g key={t.id} className="map-task">
-                    <circle cx={st.x} cy={st.y} r={42} />
-                    <text x={st.x} y={st.y + 4}>
+                    <circle cx={st.x} cy={st.y} r={56 * k} />
+                    <text x={st.x} y={st.y + 5 * k} style={{ fontSize: 64 * k }}>
                       {TASK_THEME[t.type].icon}
                     </text>
                   </g>
                 ) : null;
               })}
           {sab &&
-            SABOTAGE_STATIONS[sab.kind].map((id) => {
+            sab.stations.map((id) => {
               const st = world.map.stations.get(id)!;
-              return <circle key={id} cx={st.x} cy={st.y} r={36} className="map-sab" />;
+              return <circle key={id} cx={st.x} cy={st.y} r={36 * k} className="map-sab" />;
             })}
           {imp &&
             doorRooms.map((room) => {
               const c = roomCenter(room);
-              const ready = now >= (priv.doorReadyAt[room] ?? 0);
-              const closed = SKELD.doors.some((d) => d.room === room && pub.doors[d.id]);
               return (
-                <g
-                  key={room}
-                  className={`map-door-btn ${ready && !closed ? '' : 'off'}`}
-                  transform={`translate(${c.x - 70}, ${c.y + 40}) scale(1.3)`}
-                  onClick={() => ready && send({ t: 'sabotage', kind: 'doors', room })}
-                >
-                  <rect width={110} height={70} rx={14} />
-                  <text x={55} y={50}>
-                    🚪
-                  </text>
-                </g>
+                <DoorButton key={room} room={room} x={c.x} y={c.y + 100 * k} scale={1.6 * k} readyAt={priv.doorReadyAt[room] ?? 0} now={now} />
               );
             })}
           {imp &&
-            SAB_BUTTONS.map((b) => {
+            def.sabotages.map((b) => {
               const c = roomCenter(b.room);
               return (
                 <g
                   key={b.kind}
                   className={`map-sab-btn ${sabReady ? '' : 'off'}`}
-                  transform={`translate(${c.x - 80}, ${c.y - 190}) scale(1.35)`}
+                  transform={`translate(${c.x - 80 * k}, ${Math.max(-30, c.y - 190 * k)}) scale(${1.35 * k})`}
                   onClick={() => {
                     if (!sabReady) return;
                     send({ t: 'sabotage', kind: b.kind });
                     closeOverlay();
                   }}
                 >
+                  <title>{b.label}</title>
                   <circle cx={60} cy={60} r={62} />
                   <text x={60} y={82}>
                     {b.icon}
@@ -143,6 +172,7 @@ export function AdminView() {
   const priv = useGame((s) => s.priv);
   if (!priv) return null;
   const counts = priv.admin;
+  const k = markScale();
   return (
     <div className="overlay-backdrop" onClick={closeOverlay}>
       <div className="panel map-panel admin" onClick={(e) => e.stopPropagation()}>
@@ -154,7 +184,7 @@ export function AdminView() {
           {counts &&
             Object.entries(counts).map(([room, n]) => {
               const c = roomCenter(room);
-              const size = 80;
+              const size = 80 * k;
               const cols = Math.min(n, 4);
               return (
                 <g key={room}>

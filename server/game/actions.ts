@@ -1,15 +1,14 @@
 import { BUTTON_RANGE, CHAT_INTERVAL_MS, DOOR_CLOSE_MS, DOOR_COOLDOWN_MS, KILL_RANGES, MAX_CHAT_LENGTH, REPORT_RANGE, SABOTAGE_COOLDOWN_MS, USE_RANGE } from '../../shared/constants';
 import { dist } from '../../shared/geom';
 import type { ClientMessage } from '../../shared/protocol';
-import { SABOTAGE_STATIONS, applyFix, makeO2Code, newSabotage } from '../../shared/rules/sabotage';
+import { applyFix, makeO2Code, newSabotage } from '../../shared/rules/sabotage';
 import { TASK_DEFS } from '../../shared/rules/tasks';
 import { hasLineOfSight } from '../../shared/sim/visibility';
 import { canVentRole, type SabotageKind } from '../../shared/types';
 import { runDevCommand } from './devCommands';
 import type { Game } from './Game';
-import { queueInput, type SPlayer } from './types';
+import { latestSeq, queueInput, type SPlayer } from './types';
 
-const SABOTAGE_KINDS: SabotageKind[] = ['lights', 'reactor', 'o2', 'comms'];
 /** Small allowance for interpolation delay between what the client saw and the server state. */
 const SLACK = 20;
 
@@ -73,7 +72,7 @@ function kill(g: Game, p: SPlayer, targetEid: number): void {
   if (dist(p.x, p.y, t.x, t.y) > KILL_RANGES[g.settings.killDistance] + SLACK) return;
   if (!hasLineOfSight(p.x, p.y, t.x, t.y, g.map.visionGrid, g.closedDoorSegs())) return;
 
-  g.bodies.push({ id: g.nextBodyId++, x: t.x, y: t.y, color: t.color, victimId: t.id });
+  g.bodies.push({ id: g.nextBodyId++, x: t.x, y: t.y, color: t.color, victimId: t.id, at: g.now });
   g.teleport(p, t.x, t.y);
   t.alive = false;
   g.releasePanels(t);
@@ -97,7 +96,8 @@ function report(g: Game, p: SPlayer, bodyId: number): void {
 
 function emergency(g: Game, p: SPlayer): void {
   const btn = g.map.def.button;
-  if (!canAct(g, p) || !btn || g.criticalActive) return;
+  // No emergency meetings while any sabotage is active (body reports still work).
+  if (!canAct(g, p) || !btn || g.sabotage) return;
   if (g.now < g.buttonReadyAt || p.emergencyUsed >= g.settings.emergencyMeetings) return;
   if (dist(p.x, p.y, btn.x, btn.y) > BUTTON_RANGE + SLACK) return;
   p.emergencyUsed++;
@@ -112,18 +112,16 @@ function taskOpen(g: Game, p: SPlayer, stationId: string): void {
   if (g.phase !== 'playing' || p.venting || !p.connected) return;
   const st = g.map.stations.get(stationId);
   if (!st || !g.inRange(p, st.x, st.y)) return;
-  if (Game_isSabotage(stationId)) {
-    if (!p.alive || !g.sabotage || !SABOTAGE_STATIONS[g.sabotage.kind].includes(stationId)) return;
+  if (g.isSabotageStation(stationId)) {
+    if (!p.alive || !g.sabotage || !g.sabotage.stations.includes(stationId)) return;
   } else {
     if (g.isImpostor(p) || !currentTask(p, stationId)) return;
   }
   if (p.openStation) g.releasePanels(p);
-  p.openStation = { id: stationId, at: g.now };
+  p.openStation = { id: stationId, at: g.now, seq: latestSeq(p) };
   p.console = null;
   g.markPriv(p);
 }
-
-const Game_isSabotage = (id: string) => Object.values(SABOTAGE_STATIONS).some((ids) => ids.includes(id));
 
 function taskDone(g: Game, p: SPlayer, stationId: string): void {
   if (g.phase !== 'playing' || p.openStation?.id !== stationId) return;
@@ -164,7 +162,7 @@ function fix(g: Game, p: SPlayer, kind: SabotageKind, stationId: string, data: n
   g.sabotage = null;
   g.reactorHolders.clear();
   for (const q of g.players) {
-    if (q.openStation && SABOTAGE_STATIONS[kind].includes(q.openStation.id)) q.openStation = null;
+    if (q.openStation && s.stations.includes(q.openStation.id)) q.openStation = null;
   }
   g.markAllPriv();
 }
@@ -183,12 +181,15 @@ function sabotage(g: Game, p: SPlayer, kind: SabotageKind | 'doors', room?: stri
     g.markPub();
     return;
   }
-  if (!SABOTAGE_KINDS.includes(kind) || g.sabotage || now < g.sabotageReadyAt) return;
+  if (g.sabotage || now < g.sabotageReadyAt) return;
   startSabotage(g, kind);
 }
 
-export function startSabotage(g: Game, kind: SabotageKind): void {
-  g.sabotage = newSabotage(kind, g.now, g.rng);
+/** Start a sabotage this map supports. Returns false if it has none of that kind. */
+export function startSabotage(g: Game, kind: SabotageKind): boolean {
+  const def = g.map.sabotages.get(kind);
+  if (!def) return false;
+  g.sabotage = newSabotage(def, g.now, g.rng);
   g.sabotageReadyAt = g.now + SABOTAGE_COOLDOWN_MS;
   if (kind === 'o2') g.o2Code = makeO2Code(g.rng);
   if (kind === 'comms') {
@@ -196,6 +197,7 @@ export function startSabotage(g: Game, kind: SabotageKind): void {
   }
   g.markPub();
   g.markAllPriv();
+  return true;
 }
 
 function vent(g: Game, p: SPlayer, action: 'enter' | 'move' | 'exit', ventId?: string): void {
@@ -240,11 +242,12 @@ function consoleUse(g: Game, p: SPlayer, kind: 'cams' | 'admin' | 'vitals', open
     return;
   }
   if (!canAct(g, p)) return;
-  const st = g.map.def.stations.find((s) => s.kind === kind);
-  if (!st || !g.inRange(p, st.x, st.y)) return;
+  // Any panel of that kind works, in case a map has more than one.
+  if (!g.map.def.stations.some((s) => s.kind === kind && g.inRange(p, s.x, s.y))) return;
   if (g.commsDown && kind !== 'vitals') return;
   p.openStation = null;
   p.console = kind;
+  p.consoleSeq = latestSeq(p);
   g.markPriv(p);
   g.markPub();
 }

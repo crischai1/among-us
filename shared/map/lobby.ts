@@ -3,6 +3,8 @@ import type { MapDef } from './types';
 /** The pre-game dropship. */
 export const LOBBY: MapDef = {
   id: 'lobby',
+  name: 'Dropship',
+  theme: { void: '#07090f', hall: 'metal' },
   size: { w: 1000, h: 760 },
   rooms: [
     {
@@ -27,4 +29,6 @@ export const LOBBY: MapDef = {
   cameras: [],
   button: null,
   spawn: { x: 500, y: 330, r: 130 },
+  sabotages: [],
+  tasks: [],
 };

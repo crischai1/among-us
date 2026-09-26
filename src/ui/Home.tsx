@@ -3,11 +3,13 @@ import { MAX_NAME_LENGTH, ROOM_CODE_LENGTH } from '../../shared/constants';
 import { createRoom, joinRoom, savedName } from '../net/session';
 import { useSession } from '../store/session';
 import { CrewmateSvg } from './CrewmateSvg';
+import { HelpOverlay } from './HelpOverlay';
 
 export function Home() {
   const error = useSession((s) => s.error);
   const status = useSession((s) => s.status);
   const [name, setName] = useState(savedName());
+  const [help, setHelp] = useState(false);
   const [code, setCode] = useState(() => new URLSearchParams(location.search).get('room')?.toUpperCase() ?? '');
   const busy = status === 'connecting';
   const cleanName = name.trim();
@@ -61,8 +63,12 @@ export function Home() {
         </form>
         {busy && <div className="home-status">Connecting…</div>}
         {error && <div className="home-error">{error}</div>}
+        <button className="btn small home-howto" onClick={() => setHelp(true)}>
+          ❓ How to Play · Rules &amp; Map
+        </button>
         <div className="home-help">WASD / arrows to move · E use · Q kill · R report · V vent · Tab map</div>
       </div>
+      {help && <HelpOverlay onClose={() => setHelp(false)} />}
     </div>
   );
 }

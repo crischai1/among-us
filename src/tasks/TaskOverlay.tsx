@@ -1,18 +1,34 @@
-import { useEffect, useState } from 'react';
-import { closeOverlay } from '../game/actions';
+import { useEffect, useRef, useState } from 'react';
+import { TASK_DEFS } from '../../shared/rules/tasks';
+import { closeOverlay, setTaskFinishing } from '../game/actions';
 import { send } from '../net/session';
 import { useGame } from '../store/game';
 import { TASK_GAMES } from './registry';
 import { TASK_THEME } from './theme';
 
+/** Extra wait so network jitter can't make the server see the task as finished too fast. */
+const REPORT_MARGIN_MS = 500;
+
 export function TaskOverlay({ stationId }: { stationId: string }) {
   const task = useGame((s) => s.priv?.tasks.find((t) => !t.done && t.stationId === stationId));
+  const commsDown = useGame((s) => !!s.priv?.commsDown);
   const [done, setDone] = useState(false);
   const [snapshot] = useState(task);
+  const openedAt = useRef(performance.now());
+  const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   useEffect(() => {
-    if (!task && !done) useGame.getState().set({ overlay: null });
-  }, [task, done]);
+    // Comms sabotage hides the task list but shouldn't kick you out of a task.
+    if (!task && !done && !commsDown) useGame.getState().set({ overlay: null });
+  }, [task, done, commsDown]);
+
+  useEffect(
+    () => () => {
+      timers.current.forEach(clearTimeout);
+      setTaskFinishing(false);
+    },
+    [],
+  );
 
   const t = snapshot ?? task;
   if (!t) return null;
@@ -20,8 +36,17 @@ export function TaskOverlay({ stationId }: { stationId: string }) {
   const complete = () => {
     if (done) return;
     setDone(true);
-    send({ t: 'taskDone', stationId });
-    setTimeout(() => useGame.getState().set({ overlay: null }), 900);
+    setTaskFinishing(true);
+    // The server enforces a minimum time per step; report only once that has safely passed.
+    const minMs = TASK_DEFS[t.type].minMs[t.step] ?? 0;
+    const wait = Math.max(0, minMs + REPORT_MARGIN_MS - (performance.now() - openedAt.current));
+    timers.current.push(
+      setTimeout(() => {
+        send({ t: 'taskDone', stationId });
+        setTaskFinishing(false);
+      }, wait),
+      setTimeout(() => useGame.getState().set({ overlay: null }), Math.max(900, wait + 250)),
+    );
   };
 
   return (

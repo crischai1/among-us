@@ -1,5 +1,4 @@
 import { useEffect } from 'react';
-import { SABOTAGE_STATIONS } from '../../shared/rules/sabotage';
 import { closeOverlay } from '../game/actions';
 import { useGame } from '../store/game';
 import { useSession } from '../store/session';
@@ -24,7 +23,7 @@ export function Overlays() {
     if (overlay.kind === 'colors' && inGame) return closeOverlay();
     if (!inGame || overlay.kind === 'settings' || overlay.kind === 'colors') return;
     if (pub && pub.phase !== 'playing') return void useGame.getState().set({ overlay: null });
-    if (overlay.kind === 'fix' && (!pub?.sabotage || !SABOTAGE_STATIONS[pub.sabotage.kind].includes(overlay.stationId))) {
+    if (overlay.kind === 'fix' && (!pub?.sabotage || !pub.sabotage.stations.includes(overlay.stationId))) {
       return void useGame.getState().set({ overlay: null });
     }
     if (overlay.kind === 'console' && priv && priv.console !== overlay.console) {

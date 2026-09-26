@@ -76,7 +76,7 @@ describe('roles', () => {
 describe('tasks', () => {
   it('gives every crewmate the same commons and the configured counts', () => {
     const s = { ...DEFAULT_SETTINGS, commonTasks: 2, shortTasks: 3, longTasks: 2 };
-    const tasks = assignTasks(ids(5), new Set(['p4']), s, makeRng(5));
+    const tasks = assignTasks(ids(5), new Set(['p4']), s, makeRng(5), getShip().def);
     const lists = [...tasks.values()];
     for (const l of lists) {
       expect(l).toHaveLength(7);
@@ -87,21 +87,35 @@ describe('tasks', () => {
     expect(tasks.get('p4')!.every((t) => t.fake)).toBe(true);
     expect(tasks.get('p0')!.every((t) => !t.fake)).toBe(true);
   });
-  it('every task step refers to a real station', () => {
+  it('every task step refers to a real station of the right kind', () => {
     const map = getShip();
     for (let seed = 0; seed < 30; seed++) {
-      const tasks = assignTasks(['a'], new Set(), { ...DEFAULT_SETTINGS, commonTasks: 2, shortTasks: 5, longTasks: 5 }, makeRng(seed));
-      for (const t of tasks.get('a')!) {
-        for (const st of t.stations) expect(map.stations.has(st), st).toBe(true);
+      const tasks = assignTasks(['a'], new Set(), { ...DEFAULT_SETTINGS, commonTasks: 2, shortTasks: 5, longTasks: 5 }, makeRng(seed), map.def);
+      const list = tasks.get('a')!;
+      // Every map offers the full task counts the settings allow.
+      expect(list).toHaveLength(12);
+      for (const t of list) {
+        expect(new Set(t.stations).size, t.id).toBe(t.stations.length);
+        for (const st of t.stations) expect(map.stations.get(st)?.kind, st).toBe(t.type);
         expect(taskView(t, map).room).not.toBe('');
       }
+    }
+  });
+  it('sabotages point at real fix stations', () => {
+    const map = getShip();
+    for (const s of map.def.sabotages) {
+      expect(map.rooms.has(s.room), s.room).toBe(true);
+      expect(s.stations.length).toBeGreaterThan(0);
+      if (s.kind === 'reactor' || s.kind === 'o2') expect(s.stations.length).toBe(2);
+      for (const st of s.stations) expect(map.stations.get(st)?.kind, st).toBe(s.kind);
     }
   });
 });
 
 describe('sabotage', () => {
+  const def = (kind: 'lights' | 'reactor' | 'o2' | 'comms') => getShip().sabotages.get(kind)!;
   it('lights fixed once every switch is on', () => {
-    const s = newSabotage('lights', 0, makeRng(2));
+    const s = newSabotage(def('lights'), 0, makeRng(2));
     expect(s.lights!.some((v) => !v)).toBe(true);
     let fixed = false;
     s.lights!.forEach((on, i) => {
@@ -110,19 +124,19 @@ describe('sabotage', () => {
     expect(fixed).toBe(true);
   });
   it('reactor needs both scanners held', () => {
-    const s = newSabotage('reactor', 1000, makeRng(2));
+    const s = newSabotage(def('reactor'), 1000, makeRng(2));
     expect(s.endsAt).toBe(46_000);
     expect(applyFix(s, 'reactor:top', true, { o2Code: '', held: ['reactor:top'] })).toBe(false);
     expect(applyFix(s, 'reactor:bottom', true, { o2Code: '', held: ['reactor:top', 'reactor:bottom'] })).toBe(true);
   });
   it('o2 needs the right code at both keypads', () => {
-    const s = newSabotage('o2', 0, makeRng(2));
+    const s = newSabotage(def('o2'), 0, makeRng(2));
     expect(applyFix(s, 'o2:o2', '00000', { o2Code: '12345' })).toBe(false);
     expect(applyFix(s, 'o2:o2', '12345', { o2Code: '12345' })).toBe(false);
     expect(applyFix(s, 'o2:admin', '12345', { o2Code: '12345' })).toBe(true);
   });
   it('rejects fixes at unrelated stations', () => {
-    const s = newSabotage('comms', 0, makeRng(2));
+    const s = newSabotage(def('comms'), 0, makeRng(2));
     expect(applyFix(s, 'lights:electrical', 'tuned', { o2Code: '' })).toBe(false);
     expect(applyFix(s, 'comms:comms', 'tuned', { o2Code: '' })).toBe(true);
   });

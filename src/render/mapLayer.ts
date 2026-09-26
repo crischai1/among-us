@@ -2,16 +2,27 @@ import type { CompiledMap } from '../../shared/map';
 import { CELL } from '../../shared/map/compile';
 import type { FloorKind } from '../../shared/map/types';
 
+/**
+ * Every floor's grid is anchored to world coordinates and uses GRID (or an even
+ * fraction of it), so tile lines continue straight across doorways between
+ * rooms and halls.
+ */
+const GRID = 40;
 const FLOOR: Record<FloorKind, { fill: string; line: string; step: number }> = {
-  metal: { fill: '#7c8692', line: '#6d7682', step: 40 },
-  tile: { fill: '#9aa6b3', line: '#8793a0', step: 50 },
-  dark: { fill: '#4f5867', line: '#454d5b', step: 40 },
-  white: { fill: '#c2ccd6', line: '#aeb9c4', step: 40 },
-  grate: { fill: '#626b78', line: '#535b67', step: 20 },
-  carpet: { fill: '#546583', line: '#4b5b77', step: 60 },
+  metal: { fill: '#7c8692', line: '#6d7682', step: GRID },
+  tile: { fill: '#9aa6b3', line: '#8793a0', step: GRID },
+  dark: { fill: '#4f5867', line: '#454d5b', step: GRID },
+  white: { fill: '#c2ccd6', line: '#aeb9c4', step: GRID },
+  grate: { fill: '#626b78', line: '#535b67', step: GRID / 2 },
+  carpet: { fill: '#546583', line: '#4b5b77', step: GRID },
 };
-const HALL = { fill: '#838d99', line: '#747e8a', step: 40 };
-export const VOID = '#07090f';
+/** Hall floors are a touch lighter than the matching room floor. */
+const HALL_TINT: Partial<Record<FloorKind, { fill: string; line: string }>> = {
+  metal: { fill: '#838d99', line: '#747e8a' },
+};
+
+/** First grid line strictly inside (lo, ...) on the world-aligned grid. */
+const firstLine = (lo: number, step: number) => Math.floor(lo / step) * step + step;
 const WALL_FACE = '#4a5669';
 const WALL_TOP = '#252c38';
 
@@ -32,18 +43,19 @@ function build(map: CompiledMap): MapCache {
     const lines = new Path2D();
     for (const r of rects) {
       path.rect(r.x, r.y, r.w, r.h);
-      for (let x = r.x + style.step; x < r.x + r.w; x += style.step) {
+      for (let x = firstLine(r.x, style.step); x < r.x + r.w; x += style.step) {
         lines.moveTo(x, r.y);
         lines.lineTo(x, r.y + r.h);
       }
-      for (let y = r.y + style.step; y < r.y + r.h; y += style.step) {
+      for (let y = firstLine(r.y, style.step); y < r.y + r.h; y += style.step) {
         lines.moveTo(r.x, y);
         lines.lineTo(r.x + r.w, y);
       }
     }
     floors.push({ fill: style.fill, line: style.line, path, lines });
   };
-  addFloor(map.def.halls, HALL);
+  const hall = map.def.theme.hall;
+  addFloor(map.def.halls, { ...FLOOR[hall], ...HALL_TINT[hall] });
   for (const room of map.def.rooms) addFloor(room.rects, FLOOR[room.floor]);
 
   const { cols, rows, walkable } = map;

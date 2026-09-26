@@ -9,6 +9,8 @@ export interface CrewOpts {
   ghost?: boolean;
   alpha?: number;
   scale?: number;
+  /** Draw the whole shape in this one colour (used to build outlines). */
+  silhouette?: string;
 }
 
 const VISOR = '#93c9e0';
@@ -37,12 +39,13 @@ function leg(ctx: CanvasRenderingContext2D, x: number, lift: number, fill: strin
   ctx.restore();
 }
 
-function visor(ctx: CanvasRenderingContext2D): void {
+function visor(ctx: CanvasRenderingContext2D, silhouette?: string): void {
   ctx.beginPath();
   ctx.ellipse(6, -26, 9, 6, 0, 0, Math.PI * 2);
-  ctx.fillStyle = VISOR_SHADE;
+  ctx.fillStyle = silhouette ?? VISOR_SHADE;
   ctx.fill();
   ctx.stroke();
+  if (silhouette) return;
   ctx.beginPath();
   ctx.ellipse(6.5, -27, 7.5, 4.3, 0, 0, Math.PI * 2);
   ctx.fillStyle = VISOR;
@@ -63,7 +66,10 @@ export function drawCrewmate(ctx: CanvasRenderingContext2D, x: number, y: number
   ctx.globalAlpha *= o.alpha ?? 1;
   ctx.lineWidth = 2.4;
   ctx.lineJoin = 'round';
-  ctx.strokeStyle = OUTLINE;
+  const sil = o.silhouette;
+  ctx.strokeStyle = sil ?? OUTLINE;
+  const bodyFill = sil ?? color.body;
+  const shadeFill = sil ?? color.shadow;
 
   if (o.ghost) {
     ctx.globalAlpha *= 0.55;
@@ -109,13 +115,15 @@ export function drawCrewmate(ctx: CanvasRenderingContext2D, x: number, y: number
   const packSway = -Math.sin(p * 2 + 0.6) * 0.9 * amp;
 
   // ground shadow
-  ctx.fillStyle = 'rgba(0,0,0,0.22)';
-  ctx.beginPath();
-  ctx.ellipse(1, 0, 14 - amp * Math.abs(sn) * 1.5, 3.8, 0, 0, Math.PI * 2);
-  ctx.fill();
+  if (!sil) {
+    ctx.fillStyle = 'rgba(0,0,0,0.22)';
+    ctx.beginPath();
+    ctx.ellipse(1, 0, 14 - amp * Math.abs(sn) * 1.5, 3.8, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
 
   // back leg
-  leg(ctx, -9 - stride * 0.45, backLift, color.shadow, stride * 0.06);
+  leg(ctx, -9 - stride * 0.45, backLift, shadeFill, stride * 0.06);
 
   ctx.save();
   ctx.translate(0, bob - 8);
@@ -125,11 +133,75 @@ export function drawCrewmate(ctx: CanvasRenderingContext2D, x: number, y: number
   // backpack
   ctx.beginPath();
   ctx.roundRect(-17 + packSway, -31, 9, 19, 3);
-  ctx.fillStyle = color.shadow;
+  ctx.fillStyle = shadeFill;
   ctx.fill();
   ctx.stroke();
   // body
   bodyPath(ctx);
+  ctx.fillStyle = bodyFill;
+  ctx.fill();
+  if (!sil) {
+    ctx.save();
+    ctx.clip();
+    ctx.fillStyle = color.shadow;
+    ctx.beginPath();
+    ctx.ellipse(-12, -14, 9, 16, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+  bodyPath(ctx);
+  ctx.stroke();
+  visor(ctx, sil);
+  ctx.restore();
+
+  // front leg (drawn over the body's lower edge)
+  leg(ctx, 3 + stride * 0.45, frontLift, bodyFill, -stride * 0.06);
+  ctx.restore();
+}
+
+const KILL_OUTLINE = '#ff1f1f';
+const OUTLINE_DIRS = Array.from({ length: 8 }, (_, i) => [Math.cos((i / 8) * Math.PI * 2), Math.sin((i / 8) * Math.PI * 2)]);
+
+/** Solid red outline around a crewmate (the impostor's kill target); draw it just before the crewmate. */
+export function drawKillOutline(ctx: CanvasRenderingContext2D, x: number, y: number, color: PlayerColor, o: CrewOpts = {}): void {
+  for (const [dx, dy] of OUTLINE_DIRS) drawCrewmate(ctx, x + dx * 2.6, y + dy * 2.6, color, { ...o, silhouette: KILL_OUTLINE });
+}
+
+/** Height where a body is cut in half. */
+const CUT = -20;
+const FLESH = '#f6d6d6';
+const BONE = '#f4f1ea';
+/** The victim stands for a moment, then the top half topples off. */
+const STAND_MS = 300;
+const FALL_MS = 1000;
+
+const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
+/** Ease out with a little overshoot, for the bone popping up. */
+const easeOutBack = (k: number) => 1 + 2.2 * (k - 1) ** 3 + 1.2 * (k - 1) ** 2;
+
+/** The lower half left on the floor: legs, torso up to a jagged cut, and a bone (scaled by `bone`). */
+function lowerHalf(ctx: CanvasRenderingContext2D, color: PlayerColor, bone: number): void {
+  ctx.fillStyle = 'rgba(0,0,0,0.22)';
+  ctx.beginPath();
+  ctx.ellipse(1, 0, 14, 3.8, 0, 0, Math.PI * 2);
+  ctx.fill();
+  leg(ctx, -9, 0, color.shadow);
+  // backpack stub
+  ctx.beginPath();
+  ctx.roundRect(-17, CUT, 9, 8, [0, 0, 3, 3]);
+  ctx.fillStyle = color.shadow;
+  ctx.fill();
+  ctx.stroke();
+  // torso, cut with a jagged edge
+  const torso = () => {
+    ctx.beginPath();
+    ctx.moveTo(-11, -8);
+    ctx.lineTo(-11, CUT);
+    for (let i = 1; i <= 6; i++) ctx.lineTo(-11 + i * 4, CUT + (i % 2 ? -2.5 : 0));
+    ctx.lineTo(13, -8);
+    ctx.closePath();
+  };
+  torso();
   ctx.fillStyle = color.body;
   ctx.fill();
   ctx.save();
@@ -139,50 +211,72 @@ export function drawCrewmate(ctx: CanvasRenderingContext2D, x: number, y: number
   ctx.ellipse(-12, -14, 9, 16, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
-  bodyPath(ctx);
+  torso();
   ctx.stroke();
-  visor(ctx);
-  ctx.restore();
-
-  // front leg (drawn over the body's lower edge)
-  leg(ctx, 3 + stride * 0.45, frontLift, color.body, -stride * 0.06);
-  ctx.restore();
-}
-
-/** A dead body: lower half with a bone sticking out. */
-export function drawBody(ctx: CanvasRenderingContext2D, x: number, y: number, color: PlayerColor): void {
-  ctx.save();
-  ctx.translate(x, y);
+  // cut surface
+  ctx.beginPath();
+  ctx.ellipse(1, CUT - 0.5, 10.5, 2.8, 0, 0, Math.PI * 2);
+  ctx.fillStyle = FLESH;
+  ctx.fill();
+  ctx.lineWidth = 1.2;
+  ctx.strokeStyle = '#b8565a';
+  ctx.stroke();
   ctx.lineWidth = 2.4;
   ctx.strokeStyle = OUTLINE;
   // bone
-  ctx.fillStyle = '#f2f2f2';
-  ctx.beginPath();
-  ctx.roundRect(-2, -26, 5, 14, 2);
-  ctx.fill();
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.arc(-1.5, -27, 3.2, 0, Math.PI * 2);
-  ctx.arc(2.5, -27, 3.2, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.stroke();
-  // legs
-  leg(ctx, -9, 0, color.shadow);
+  if (bone > 0) {
+    ctx.save();
+    ctx.translate(2.5, CUT - 0.5);
+    ctx.rotate(-0.28);
+    ctx.scale(bone, bone);
+    ctx.beginPath();
+    ctx.roundRect(-2.2, -11, 4.4, 11, 1.5);
+    ctx.fillStyle = BONE;
+    ctx.fill();
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(-2.3, -11.5, 2.9, 0, Math.PI * 2);
+    ctx.arc(2.3, -11.5, 2.9, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = BONE;
+    ctx.fillRect(-2.2, -12, 4.4, 3); // hide the seam between knobs and shaft
+    ctx.restore();
+  }
   leg(ctx, 3, 0, color.body);
-  // half body
-  ctx.beginPath();
-  ctx.moveTo(-11, -8);
-  ctx.lineTo(-11, -17);
-  for (let i = 0; i <= 6; i++) ctx.lineTo(-11 + i * 4, -17 + (i % 2 ? -3 : 0));
-  ctx.lineTo(13, -8);
-  ctx.closePath();
-  ctx.fillStyle = color.body;
-  ctx.fill();
-  ctx.stroke();
-  ctx.fillStyle = '#e9e6e6';
-  ctx.beginPath();
-  ctx.ellipse(1, -17, 10, 2.5, 0, 0, Math.PI * 2);
-  ctx.fill();
+}
+
+/**
+ * A dead body. For the first moments after the kill (ageMs since death) the
+ * victim stands, then the top half topples backwards and fades as the bone
+ * pops out; after that only the lower half remains.
+ */
+export function drawBody(ctx: CanvasRenderingContext2D, x: number, y: number, color: PlayerColor, ageMs = Infinity): void {
+  if (ageMs < STAND_MS) {
+    drawCrewmate(ctx, x + Math.sin(ageMs / 16) * 1.4, y, color);
+    return;
+  }
+  const k = clamp01((ageMs - STAND_MS) / FALL_MS);
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.lineWidth = 2.4;
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = OUTLINE;
+  lowerHalf(ctx, color, easeOutBack(clamp01((k - 0.25) / 0.4)));
+  if (k < 1) {
+    // Top half: tips back around the rear of the cut, speeding up as it falls, then fades.
+    const fall = k * k;
+    ctx.save();
+    ctx.globalAlpha *= 1 - clamp01((k - 0.7) / 0.3);
+    ctx.translate(-11 - fall * 8, CUT + fall * 14);
+    ctx.rotate(-1.8 * fall);
+    ctx.translate(11, -CUT);
+    ctx.beginPath();
+    ctx.rect(-40, -80, 80, 80 + CUT);
+    ctx.clip();
+    drawCrewmate(ctx, 0, 0, color);
+    ctx.restore();
+  }
   ctx.restore();
 }
 

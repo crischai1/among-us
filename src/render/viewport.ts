@@ -1,7 +1,6 @@
 import type { Rect } from '../../shared/geom';
 import { pointInRect } from '../../shared/geom';
 import { world } from '../world/world';
-import { VOID } from './mapLayer';
 import { drawSceneEntities, drawSceneFloor, drawSceneTop, drawTags, type Look } from './scene';
 
 /** Render a fixed world rect (security camera) into a canvas: no fog, no ghosts. */
@@ -10,7 +9,7 @@ export function renderViewport(ctx: CanvasRenderingContext2D, view: Rect, t: num
   const H = ctx.canvas.height;
   const k = Math.min(W / view.w, H / view.h);
   ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.fillStyle = VOID;
+  ctx.fillStyle = world.map.def.theme.void;
   ctx.fillRect(0, 0, W, H);
   ctx.setTransform(k, 0, 0, k, -view.x * k + (W - view.w * k) / 2, -view.y * k + (H - view.h * k) / 2);
   drawSceneFloor(ctx, world.map, t, null);

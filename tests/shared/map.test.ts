@@ -84,6 +84,23 @@ describe.each([
       for (const l of v.links) expect(map.vents.get(l)?.links, `${v.id}->${l}`).toContain(v.id);
   });
 
+  it('rooms do not overlap and everything fits on the map', () => {
+    const rects = map.def.rooms.flatMap((r) => r.rects.map((rc) => ({ id: r.id, ...rc })));
+    for (const a of rects) {
+      expect(a.x >= 0 && a.y >= 0 && a.x + a.w <= map.def.size.w && a.y + a.h <= map.def.size.h, a.id).toBe(true);
+      for (const b of rects) {
+        if (a === b) continue;
+        const overlap = a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+        expect(overlap, `${a.id} overlaps ${b.id}`).toBe(false);
+      }
+    }
+  });
+
+  it('door rooms and camera views are real', () => {
+    for (const d of map.def.doors) expect(map.rooms.has(d.room), d.id).toBe(true);
+    for (const c of map.cameras) expect(c.view.w / c.view.h, c.id).toBeCloseTo(1.5);
+  });
+
   it('stations and vents sit in their declared room', () => {
     for (const s of map.def.stations) expect(map.roomAt(s.x, s.y), s.id).toBe(s.room);
     for (const v of map.def.vents) expect(map.roomAt(v.x, v.y), v.id).toBe(v.room);

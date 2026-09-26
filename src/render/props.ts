@@ -25,7 +25,14 @@ function circle(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, 
   }
 }
 
-function drawObstacle(ctx: CanvasRenderingContext2D, o: ObstacleDef, t: number, button: { x: number; y: number } | null) {
+function drawButton(ctx: CanvasRenderingContext2D, b: { x: number; y: number }) {
+  circle(ctx, b.x, b.y + 4, 22, '#6d7784');
+  circle(ctx, b.x, b.y, 22, '#b9c2cc');
+  circle(ctx, b.x, b.y - 3, 15, '#c51a1a');
+  circle(ctx, b.x - 4, b.y - 7, 5, 'rgba(255,255,255,0.45)', OUT, 0);
+}
+
+function drawObstacle(ctx: CanvasRenderingContext2D, o: ObstacleDef, t: number) {
   const r = o.rect;
   const c = o.circle;
   switch (o.prop) {
@@ -38,12 +45,6 @@ function drawObstacle(ctx: CanvasRenderingContext2D, o: ObstacleDef, t: number, 
       circle(ctx, c!.x, c!.y + 5, c!.r, '#3d4550');
       circle(ctx, c!.x, c!.y, c!.r, '#8e9aa8');
       circle(ctx, c!.x, c!.y, c!.r * 0.75, '#a3afbc', OUT, 0);
-      if (button) {
-        circle(ctx, button.x, button.y + 4, 22, '#6d7784');
-        circle(ctx, button.x, button.y, 22, '#b9c2cc');
-        circle(ctx, button.x, button.y - 3, 15, '#c51a1a');
-        circle(ctx, button.x - 4, button.y - 7, 5, 'rgba(255,255,255,0.45)', OUT, 0);
-      }
       break;
     }
     case 'engine': {
@@ -99,6 +100,35 @@ function drawObstacle(ctx: CanvasRenderingContext2D, o: ObstacleDef, t: number, 
       rr(ctx, r!.x, r!.y, r!.w, r!.h, 4, '#9aa3ad');
       rr(ctx, r!.x + 6, r!.y + 6, r!.w - 12, r!.h - 12, 3, '#b3bbc4', OUT, 1.5);
       break;
+    case 'cabinets': {
+      // A bank of electrical cabinets: top surface, then a front face of panels.
+      const { x, y, w, h } = r!;
+      rr(ctx, x, y, w, h, 4, '#5f6b77');
+      const fy = y + h * 0.3;
+      const fh = h * 0.7;
+      rr(ctx, x, fy, w, fh, 3, '#8795a1');
+      const n = 4;
+      const pw = w / n;
+      for (let i = 0; i < n; i++) {
+        const px = x + i * pw + 4;
+        const fuse = i >= 2;
+        rr(ctx, px, fy + 6, pw - 8, fh - 12, 3, fuse ? '#2e343c' : '#b9c6cf', OUT, 1.5);
+        if (fuse) {
+          for (let row = 0; row < 5; row++)
+            for (let col = 0; col < 2; col++) circle(ctx, px + 10 + col * (pw - 28), fy + 16 + row * ((fh - 30) / 4), 2.2, '#e0662e', OUT, 0);
+          line(ctx, [px + (pw - 8) / 2, fy + 6, px + (pw - 8) / 2 + Math.sin(t / 900 + i) * 2, fy + fh - 10], '#15181c', 3);
+        } else if (i === 0) {
+          ctx.fillStyle = '#ffd23b';
+          ctx.beginPath();
+          ctx.moveTo(px + (pw - 8) / 2, fy + fh / 2 - 9);
+          ctx.lineTo(px + (pw - 8) / 2 + 9, fy + fh / 2 + 7);
+          ctx.lineTo(px + (pw - 8) / 2 - 9, fy + fh / 2 + 7);
+          ctx.closePath();
+          ctx.fill();
+        }
+      }
+      break;
+    }
   }
 }
 
@@ -117,7 +147,7 @@ function stationShape(s: StationDef): Shape | null {
     case 'calibrate':
       return box(s, 34, 22);
     case 'divert':
-      return s.room === 'electrical' ? box(s, 40, 26) : box(s, 22, 24);
+      return s.main ? box(s, 40, 26) : box(s, 22, 24);
     case 'transfer':
       return box(s, 30, 24);
     case 'align':
@@ -126,7 +156,7 @@ function stationShape(s: StationDef): Shape | null {
     case 'asteroids':
       return { kind: 'ellipse', x: s.x, y: s.y, rx: 15, ry: 15 };
     case 'fuel':
-      return s.room === 'storage' ? box(s, 30, 22) : { kind: 'ellipse', x: s.x, y: s.y, rx: 13, ry: 13 };
+      return s.main ? box(s, 30, 22) : { kind: 'ellipse', x: s.x, y: s.y, rx: 13, ry: 13 };
     case 'garbage':
       return box(s, 28, 32);
     case 'scan':
@@ -189,7 +219,7 @@ function drawStation(ctx: CanvasRenderingContext2D, s: StationDef, t: number) {
       });
       break;
     case 'divert':
-      if (s.room === 'electrical') {
+      if (s.main) {
         rr(ctx, x - 20, y - 13, 40, 26, 4, '#39424e');
         for (let i = 0; i < 6; i++) {
           rr(ctx, x - 16 + i * 6, y - 9, 3, 18, 1, '#111', OUT, 0.8);
@@ -242,7 +272,7 @@ function drawStation(ctx: CanvasRenderingContext2D, s: StationDef, t: number) {
       circle(ctx, x + 4, y - 3, 3, '#ffd23b', OUT, 0);
       break;
     case 'fuel':
-      if (s.room === 'storage') {
+      if (s.main) {
         for (const dx of [-8, 8]) {
           rr(ctx, x + dx - 6, y - 8, 12, 18, 2, '#c62d2d');
           rr(ctx, x + dx + 1, y - 12, 4, 5, 1, '#888', OUT, 1.2);
@@ -328,13 +358,35 @@ export interface StationMarks {
   tasks: Map<string, string>;
   /** Stations of the active sabotage (viewer alive). */
   sabotage: Set<string>;
+  /** Usable consoles (cameras, admin, vitals): station id -> icon. */
+  consoles: Map<string, string>;
   /** Station currently in use range (Use button target). */
   inRange: string | null;
 }
 
 /** Yellow (task) or red (sabotage) outline that follows the prop's shape, plus a floating icon for tasks. */
-function drawMark(ctx: CanvasRenderingContext2D, s: StationDef, t: number, color: string, near: boolean, icon: string | null): void {
-  const sh = stationShape(s);
+/**
+ * Outline for a station's mark. Cameras and admin have no prop of their own:
+ * they are the desk or table next to them, so the outline wraps that instead.
+ */
+function markShape(map: CompiledMap, s: StationDef): Shape | null {
+  const own = stationShape(s);
+  if (own) return own;
+  let best: Shape | null = null;
+  let bestD = 40;
+  for (const o of map.def.obstacles) {
+    if (!o.rect) continue;
+    const { x, y, w, h } = o.rect;
+    const d = Math.hypot(Math.max(x - s.x, 0, s.x - x - w), Math.max(y - s.y, 0, s.y - y - h));
+    if (d <= bestD) {
+      bestD = d;
+      best = { kind: 'rect', x, y, w, h, r: 6 };
+    }
+  }
+  return best;
+}
+
+function drawMark(ctx: CanvasRenderingContext2D, s: StationDef, sh: Shape | null, t: number, color: string, near: boolean, icon: string | null): void {
   if (!sh) return;
   ctx.save();
   ctx.globalAlpha *= near ? 1 : 0.6 + Math.sin(t / 260) * 0.35;
@@ -365,7 +417,8 @@ function drawMark(ctx: CanvasRenderingContext2D, s: StationDef, t: number, color
 }
 
 export function drawProps(ctx: CanvasRenderingContext2D, map: CompiledMap, t: number): void {
-  for (const o of map.def.obstacles) drawObstacle(ctx, o, t, map.def.button);
+  for (const o of map.def.obstacles) drawObstacle(ctx, o, t);
+  if (map.def.button) drawButton(ctx, map.def.button);
   for (const s of map.def.stations) drawStation(ctx, s, t);
 }
 
@@ -379,10 +432,12 @@ export function drawStationMarks(
 ): void {
   for (const s of map.def.stations) {
     const sab = marks.sabotage.has(s.id);
-    if (!sab && !marks.tasks.has(s.id)) continue;
+    const icon = marks.tasks.get(s.id) ?? marks.consoles.get(s.id);
+    if (!sab && !icon) continue;
     if (!visible(s.x, s.y)) continue;
-    if (sab) drawMark(ctx, s, t, '#ff3b3b', marks.inRange === s.id, '⚠️');
-    else drawMark(ctx, s, t, '#ffffff', marks.inRange === s.id, marks.tasks.get(s.id)!);
+    const near = marks.inRange === s.id;
+    if (sab) drawMark(ctx, s, markShape(map, s), t, '#ff3b3b', near, '⚠️');
+    else drawMark(ctx, s, markShape(map, s), t, '#ffffff', near, icon!);
   }
 }
 

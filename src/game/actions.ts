@@ -10,15 +10,37 @@ export function openOverlay(o: Overlay | null): void {
   g().set({ overlay: o });
 }
 
-/** Close whatever panel is open, telling the server if it tracks it. */
+/** True while a finished task is waiting to report to the server; closing is deferred. */
+let finishing = false;
+export function setTaskFinishing(v: boolean): void {
+  finishing = v;
+}
+
+/** Close whatever panel is open. The server is told by the subscriber below. */
 export function closeOverlay(): void {
-  const o = g().overlay;
-  if (!o) return;
-  if (o.kind === 'task' || o.kind === 'fix') send({ t: 'taskClose' });
-  if (o.kind === 'console') send({ t: 'console', kind: o.console, open: false });
-  if (o.kind === 'portableVitals') send({ t: 'portableVitals', open: false });
+  if (!g().overlay || finishing) return;
   g().set({ overlay: null });
 }
+
+/**
+ * However a panel goes away (close button, Esc, completion, sabotage, meeting),
+ * tell the server so it never keeps the player locked at a station.
+ */
+function notifyClosed(prev: Overlay, next: Overlay | null): void {
+  if (prev.kind === 'task' || prev.kind === 'fix') {
+    if (next && (next.kind === 'task' || next.kind === 'fix') && next.stationId === prev.stationId) return;
+    send({ t: 'taskClose' });
+  } else if (prev.kind === 'console') {
+    if (next?.kind === 'console' && next.console === prev.console) return;
+    send({ t: 'console', kind: prev.console, open: false });
+  } else if (prev.kind === 'portableVitals' && next?.kind !== 'portableVitals') {
+    send({ t: 'portableVitals', open: false });
+  }
+}
+
+useGame.subscribe((state, prev) => {
+  if (prev.overlay && state.overlay !== prev.overlay && useSession.getState().room?.inGame) notifyClosed(prev.overlay, state.overlay);
+});
 
 export function doUse(): void {
   const { nearby, overlay } = g();
@@ -52,7 +74,7 @@ export function canPressButton(): boolean {
   const { pub, priv } = g();
   if (!pub || !priv) return false;
   if (priv.emergencyLeft <= 0) return false;
-  if (pub.sabotage && (pub.sabotage.kind === 'reactor' || pub.sabotage.kind === 'o2')) return false;
+  if (pub.sabotage) return false;
   return serverNow() >= pub.buttonReadyAt;
 }
 

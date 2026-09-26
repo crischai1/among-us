@@ -206,4 +206,61 @@ describe('Game flow', () => {
     g.removePlayer('p0');
     expect(g.gameOver).toMatchObject({ winner: 'crew', reason: 'disconnect' });
   });
+  it('every meeting resets the kill cooldown in full', () => {
+    const h = makeGame(5, { p0: 'impostor' }, { discussionTime: 0, killCooldown: 30 });
+    h.advance(REVEAL_MS + 20_000);
+    const btn = h.g.map.def.button!;
+    place(h.g, 'p2', btn.x, btn.y + 90);
+    h.act('p2', { t: 'emergency' });
+    expect(h.g.meeting?.kind).toBe('emergency');
+    h.advance(3100); // intro -> voting (no discussion)
+    for (const p of h.g.active) if (p.alive) h.act(p.id, { t: 'vote', target: 'skip' });
+    h.advance(5100); // results
+    h.advance(7100); // ejection
+    expect(h.g.phase).toBe('playing');
+    expect(h.g.byId.get('p0')!.killReadyAt - h.now).toBeGreaterThan(29_000);
+  });
+
+  it('the emergency button is locked during any sabotage, but bodies can still be reported', () => {
+    const h = makeGame(5, { p0: 'impostor' });
+    const { g } = h;
+    h.advance(REVEAL_MS + 40_000);
+    h.act('p0', { t: 'sabotage', kind: 'lights' });
+    expect(g.sabotage?.kind).toBe('lights');
+    const btn = g.map.def.button!;
+    place(g, 'p2', btn.x, btn.y + 90);
+    h.act('p2', { t: 'emergency' });
+    expect(g.phase).toBe('playing');
+
+    g.sabotage = null; // fixed
+    h.act('p2', { t: 'emergency' });
+    expect(g.phase).toBe('meeting');
+
+    const r = makeGame(5, { p0: 'impostor' });
+    r.advance(REVEAL_MS + 40_000);
+    const p0 = r.g.byId.get('p0')!;
+    place(r.g, 'p1', p0.x + 30, p0.y);
+    p0.killReadyAt = 0;
+    r.act('p0', { t: 'kill', target: r.g.byId.get('p1')!.eid });
+    r.act('p0', { t: 'sabotage', kind: 'lights' });
+    const body = r.g.bodies[0];
+    place(r.g, 'p2', body.x + 20, body.y);
+    r.act('p2', { t: 'report', bodyId: body.id });
+    expect(r.g.meeting?.kind).toBe('report');
+  });
+  it('snapshots send each body with its time of death, for the fall animation', () => {
+    const h = makeGame(5, { p0: 'impostor' });
+    const { g } = h;
+    h.advance(REVEAL_MS + 100);
+    const p0 = g.byId.get('p0')!;
+    place(g, 'p1', p0.x + 30, p0.y);
+    place(g, 'p2', p0.x + 60, p0.y);
+    p0.killReadyAt = 0;
+    const killedAt = g.now;
+    h.act('p0', { t: 'kill', target: g.byId.get('p1')!.eid });
+    h.advance(50);
+    const body = h.last('p2', 'snap')!.bodies[0];
+    expect(body[0]).toBe(g.bodies[0].id);
+    expect(body[4]).toBe(killedAt);
+  });
 });
