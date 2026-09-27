@@ -11,6 +11,7 @@ export interface SPlayer extends InputQueue {
   id: string;
   name: string;
   color: number;
+  hat: number;
   /** Opaque per-game entity id sent in snapshots. */
   eid: number;
   /** Index in the roster (pub.players order). */
@@ -56,6 +57,7 @@ export interface Body {
   x: number;
   y: number;
   color: number;
+  hat: number;
   victimId: string;
   /** Server time of the kill. */
   at: number;

@@ -83,7 +83,7 @@ export const world = {
   seq: 0,
   pending: [] as PendingInput[],
   ents: new Map<number, RemoteEnt>(),
-  bodies: new Map<number, { x: number; y: number; color: number; at: number }>(),
+  bodies: new Map<number, { x: number; y: number; color: number; at: number; hat: number }>(),
   effects: [] as Effect[],
 };
 
@@ -169,7 +169,7 @@ export function applySnap(msg: SnapMessage): void {
   for (const e of world.ents.values()) if (!seen.has(e.eid)) e.present = false;
 
   world.bodies.clear();
-  for (const [id, x, y, color, at] of msg.bodies) world.bodies.set(id, { x, y, color, at });
+  for (const [id, x, y, color, at, hat] of msg.bodies) world.bodies.set(id, { x, y, color, at, hat });
 }
 
 /** Interpolate remote entities to renderTime and advance their animation. */

@@ -125,6 +125,19 @@
 .color-swatch { width: 44px; height: 44px; border-radius: 10px; border: 3px solid #000; cursor: pointer; color: #000; font-weight: 900; font-size: 20px; }
 .color-swatch.selected { box-shadow: 0 0 0 3px #fff; }
 .color-swatch:disabled { opacity: 0.35; cursor: not-allowed; }
+.hat-name { color: var(--muted); font-size: 14px; }
+.customize-body { display: flex; flex-direction: column; gap: 12px; min-height: 196px; }
+.customize-tabs { display: flex; gap: 8px; }
+.hat-grid { display: grid; grid-template-columns: repeat(5, 56px); gap: 8px; }
+.hat-swatch { width: 56px; height: 64px; border-radius: 10px; border: 3px solid #000; background: rgba(255,255,255,0.08); cursor: pointer; display: flex; align-items: flex-end; justify-content: center; padding: 0 0 4px; }
+.hat-swatch.selected { border-color: #fff; box-shadow: 0 0 0 3px #fff; }
+.hat-swatch:hover { background: rgba(255,255,255,0.16); }
+.hat-none { font-size: 28px; color: var(--muted); align-self: center; }
+@media (max-width: 560px) {
+  .color-panel { flex-direction: column; }
+  .color-grid { grid-template-columns: repeat(6, 38px); }
+  .color-swatch { width: 38px; height: 38px; }
+}
 
 /* Game HUD */
 .task-panel { position: absolute; top: 12px; left: 12px; width: min(330px, 42vw); display: flex; flex-direction: column; gap: 8px; }

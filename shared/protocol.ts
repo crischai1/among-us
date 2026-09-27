@@ -6,6 +6,7 @@ export type ClientMessage =
   | { t: 'join'; code: string; name: string; token?: string }
   | { t: 'leave' }
   | { t: 'setColor'; color: number }
+  | { t: 'setHat'; hat: number }
   | { t: 'setSettings'; patch: Record<string, unknown> }
   | { t: 'start' }
   | { t: 'kick'; id: string }

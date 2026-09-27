@@ -10,7 +10,11 @@ import { drawCameras, drawDecals, drawDecon, drawDoors, drawProps, drawSensors, 
 export interface Look {
   name: string;
   color: number;
+  hat: number;
 }
+
+/** Name tags sit higher over a hat. */
+const tagLift = (look: Look): number => (look.hat ? 58 : 44);
 
 export interface SceneOpts {
   map: CompiledMap;
@@ -60,7 +64,7 @@ export function drawSceneEntities(ctx: CanvasRenderingContext2D, o: SceneOpts): 
       draw: () => {
         ctx.save();
         ctx.globalAlpha = a;
-        drawBody(ctx, b.x, b.y, colorOf(b.color), now - b.at);
+        drawBody(ctx, b.x, b.y, colorOf(b.color), now - b.at, b.hat);
         ctx.restore();
       },
     });
@@ -79,23 +83,23 @@ export function drawSceneEntities(ctx: CanvasRenderingContext2D, o: SceneOpts): 
       draw: () => {
         ctx.save();
         ctx.globalAlpha = a;
-        const pose = { facing: e.facing, walk: e.walk, amp: e.amp, ghost };
+        const pose = { facing: e.facing, walk: e.walk, amp: e.amp, ghost, hat: look.hat };
         if (e.eid === o.killTarget) drawKillOutline(ctx, e.x, e.y, color, pose);
         drawCrewmate(ctx, e.x, e.y, color, pose);
         if (scanning) drawScan(ctx, e.x, e.y, o.t);
         ctx.restore();
       },
     });
-    if (o.names && a > 0.3) tags.push({ x: e.x, y: e.y - 44, name: look.name, color: e.flags & F_TEAMMATE ? '#ff4b4b' : '#ffffff' });
+    if (o.names && a > 0.3) tags.push({ x: e.x, y: e.y - tagLift(look), name: look.name, color: e.flags & F_TEAMMATE ? '#ff4b4b' : '#ffffff' });
   }
   const s = o.self;
   if (s) {
     const ghost = (s.flags & F_GHOST) !== 0;
     items.push({
       y: s.y,
-      draw: () => drawCrewmate(ctx, s.x, s.y, colorOf(s.look.color), { facing: s.facing, walk: s.walk, amp: s.amp, ghost }),
+      draw: () => drawCrewmate(ctx, s.x, s.y, colorOf(s.look.color), { facing: s.facing, walk: s.walk, amp: s.amp, ghost, hat: s.look.hat }),
     });
-    if (o.names) tags.push({ x: s.x, y: s.y - 44, name: s.look.name, color: s.red ? '#ff4b4b' : '#ffffff' });
+    if (o.names) tags.push({ x: s.x, y: s.y - tagLift(s.look), name: s.look.name, color: s.red ? '#ff4b4b' : '#ffffff' });
   }
   items.sort((a, b) => a.y - b.y);
   for (const it of items) it.draw();

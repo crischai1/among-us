@@ -8,6 +8,8 @@ import { conn } from './connection';
 
 const tokenKey = (code: string) => `au:token:${code}`;
 const PREF_NAME = 'au:name';
+const PREF_COLOR = 'au:color';
+const PREF_HAT = 'au:hat';
 
 function ssGet(k: string): string | null {
   try {
@@ -38,6 +40,33 @@ function saveName(name: string): void {
   } catch {
     /* storage unavailable */
   }
+}
+
+function savedIndex(key: string): number | null {
+  try {
+    const v = localStorage.getItem(key);
+    return v === null ? null : Number(v);
+  } catch {
+    return null;
+  }
+}
+function saveIndex(key: string, i: number): void {
+  try {
+    localStorage.setItem(key, String(i));
+  } catch {
+    /* storage unavailable */
+  }
+}
+
+/** Pick a colour and remember it for the next room (if it's free there). */
+export function pickColor(color: number): void {
+  saveIndex(PREF_COLOR, color);
+  send({ t: 'setColor', color });
+}
+
+export function pickHat(hat: number): void {
+  saveIndex(PREF_HAT, hat);
+  send({ t: 'setHat', hat });
 }
 
 let lastName = '';
@@ -97,6 +126,13 @@ function onMessage(msg: ServerMessage): void {
         const q = new URLSearchParams(location.search);
         q.set('room', msg.code);
         history.replaceState(null, '', `?${q.toString().replace(/=(&|$)/g, '$1')}`);
+      }
+      {
+        // Restore saved cosmetics; the server ignores these mid-game or if the colour is taken.
+        const color = savedIndex(PREF_COLOR);
+        const hat = savedIndex(PREF_HAT);
+        if (color !== null) send({ t: 'setColor', color });
+        if (hat !== null) send({ t: 'setHat', hat });
       }
       return;
     case 'lobby': {

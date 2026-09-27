@@ -31,7 +31,7 @@ export function VitalsView({ portable }: { portable?: boolean }) {
             if (!p) return null;
             return (
               <div key={v.id} className={`vital ${v.state}`}>
-                <CrewmateSvg color={p.color} size={34} dead={v.state === 'dead'} />
+                <CrewmateSvg color={p.color} hat={p.hat} size={34} dead={v.state === 'dead'} />
                 <span className="vital-name">{p.name}</span>
                 <svg className="ekg" viewBox="0 0 100 30" preserveAspectRatio="none">
                   {v.state === 'alive' ? (

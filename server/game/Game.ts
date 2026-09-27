@@ -27,6 +27,7 @@ export interface GamePlayerInit {
   id: string;
   name: string;
   color: number;
+  hat?: number;
 }
 
 export interface GameOptions {
@@ -104,6 +105,7 @@ export class Game {
       const sp = spawnPoint(this.map.def, i, opts.players.length, this.map.def.start);
       const p: SPlayer = {
         ...init,
+        hat: init.hat ?? 0,
         eid: eids[i],
         idx: i,
         role,

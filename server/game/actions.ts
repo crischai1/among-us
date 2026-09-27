@@ -74,7 +74,7 @@ function kill(g: Game, p: SPlayer, targetEid: number): void {
   if (dist(p.x, p.y, t.x, t.y) > KILL_RANGES[g.settings.killDistance] + SLACK) return;
   if (!hasLineOfSight(p.x, p.y, t.x, t.y, g.map.visionGrid, g.closedDoorSegs())) return;
 
-  g.bodies.push({ id: g.nextBodyId++, x: t.x, y: t.y, color: t.color, victimId: t.id, at: g.now });
+  g.bodies.push({ id: g.nextBodyId++, x: t.x, y: t.y, color: t.color, hat: t.hat, victimId: t.id, at: g.now });
   g.teleport(p, t.x, t.y);
   t.alive = false;
   g.releasePanels(t);

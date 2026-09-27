@@ -23,6 +23,7 @@ export function buildPub(g: Game, viewer: SPlayer): PubState {
       id: p.id,
       name: p.name,
       color: p.color,
+      hat: p.hat,
       dead: !p.alive && (p.knownDead || seesAllDeaths || p.id === viewer.id),
       disconnected: p.removed || !p.connected,
     })),
@@ -135,7 +136,7 @@ export function buildSnap(g: Game, viewer: SPlayer): SnapMessage {
     }
   }
   const bodies: BodyTuple[] = playing
-    ? g.bodies.filter((b) => visible(b.x, b.y)).map((b) => [b.id, r1(b.x), r1(b.y), b.color, b.at])
+    ? g.bodies.filter((b) => visible(b.x, b.y)).map((b) => [b.id, r1(b.x), r1(b.y), b.color, b.at, b.hat])
     : [];
 
   return {

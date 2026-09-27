@@ -14,7 +14,7 @@ const { MeetingScreen } = await import('../../src/ui/MeetingScreen');
 const pub = {
   phase: 'meeting',
   phaseEndsAt: 0,
-  players: ['Red', 'Blue', 'Green'].map((name, i) => ({ id: `p${i}`, name, color: i, dead: false, disconnected: false })),
+  players: ['Red', 'Blue', 'Green'].map((name, i) => ({ id: `p${i}`, name, color: i, hat: 0, dead: false, disconnected: false })),
   taskBar: 0,
   sabotage: null,
   doors: {},

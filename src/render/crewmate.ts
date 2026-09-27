@@ -1,4 +1,5 @@
 import type { PlayerColor } from '../../shared/colors';
+import { hatOf } from '../../shared/cosmetics';
 
 export interface CrewOpts {
   facing?: 1 | -1;
@@ -11,6 +12,8 @@ export interface CrewOpts {
   scale?: number;
   /** Draw the whole shape in this one colour (used to build outlines). */
   silhouette?: string;
+  /** Index into HATS. */
+  hat?: number;
 }
 
 const VISOR = '#93c9e0';
@@ -56,6 +59,28 @@ function visor(ctx: CanvasRenderingContext2D, silhouette?: string): void {
   ctx.fill();
 }
 
+const hatPaths = new Map<string, Path2D>();
+
+function drawHat(ctx: CanvasRenderingContext2D, hat: number | undefined, color: PlayerColor, silhouette?: string): void {
+  if (!hat) return;
+  const lw = ctx.lineWidth;
+  for (const part of hatOf(hat).parts) {
+    let path = hatPaths.get(part.d);
+    if (!path) hatPaths.set(part.d, (path = new Path2D(part.d)));
+    if (part.fill !== 'none') {
+      ctx.fillStyle = silhouette ?? (part.fill === 'body' ? color.body : part.fill === 'shadow' ? color.shadow : part.fill);
+      ctx.fill(path);
+    }
+    if (part.stroke === 'none') continue;
+    ctx.save();
+    ctx.lineWidth = part.width ?? lw;
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = silhouette ?? part.stroke ?? OUTLINE;
+    ctx.stroke(path);
+    ctx.restore();
+  }
+}
+
 /** Draw a crewmate with feet at (x, y). About 40 units tall at scale 1. */
 export function drawCrewmate(ctx: CanvasRenderingContext2D, x: number, y: number, color: PlayerColor, o: CrewOpts = {}): void {
   const facing = o.facing ?? 1;
@@ -95,6 +120,7 @@ export function drawCrewmate(ctx: CanvasRenderingContext2D, x: number, y: number
     ctx.fill();
     ctx.stroke();
     visor(ctx);
+    drawHat(ctx, o.hat, color);
     ctx.restore();
     return;
   }
@@ -152,6 +178,7 @@ export function drawCrewmate(ctx: CanvasRenderingContext2D, x: number, y: number
   bodyPath(ctx);
   ctx.stroke();
   visor(ctx, sil);
+  drawHat(ctx, o.hat, color, sil);
   ctx.restore();
 
   // front leg (drawn over the body's lower edge)
@@ -251,9 +278,9 @@ function lowerHalf(ctx: CanvasRenderingContext2D, color: PlayerColor, bone: numb
  * victim stands, then the top half topples backwards and fades as the bone
  * pops out; after that only the lower half remains.
  */
-export function drawBody(ctx: CanvasRenderingContext2D, x: number, y: number, color: PlayerColor, ageMs = Infinity): void {
+export function drawBody(ctx: CanvasRenderingContext2D, x: number, y: number, color: PlayerColor, ageMs = Infinity, hat = 0): void {
   if (ageMs < STAND_MS) {
-    drawCrewmate(ctx, x + Math.sin(ageMs / 16) * 1.4, y, color);
+    drawCrewmate(ctx, x + Math.sin(ageMs / 16) * 1.4, y, color, { hat });
     return;
   }
   const k = clamp01((ageMs - STAND_MS) / FALL_MS);
@@ -274,7 +301,7 @@ export function drawBody(ctx: CanvasRenderingContext2D, x: number, y: number, co
     ctx.beginPath();
     ctx.rect(-40, -80, 80, 80 + CUT);
     ctx.clip();
-    drawCrewmate(ctx, 0, 0, color);
+    drawCrewmate(ctx, 0, 0, color, { hat });
     ctx.restore();
   }
   ctx.restore();

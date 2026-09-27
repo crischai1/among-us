@@ -54,7 +54,7 @@ export function MeetingScreen() {
                   className={`vote-card ${p.dead ? 'dead' : ''} ${pending === p.id ? 'pending' : ''} ${priv.vote === p.id ? 'mine' : ''} ${selectable ? 'selectable' : ''}`}
                   onClick={() => selectable && setPending(pending === p.id ? null : p.id)}
                 >
-                  <CrewmateSvg color={p.color} size={40} dead={p.dead} />
+                  <CrewmateSvg color={p.color} hat={p.hat} size={40} dead={p.dead} />
                   <div className={`vote-name ${team.has(p.id) ? 'imp' : ''}`}>
                     {p.name}
                     {p.id === selfId && ' (you)'}

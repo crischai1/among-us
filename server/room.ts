@@ -1,5 +1,6 @@
 import type { WebSocket } from 'ws';
 import { COLORS } from '../shared/colors';
+import { isHat } from '../shared/cosmetics';
 import {
   GAME_GRACE_MS, LOBBY_GRACE_MS, MAX_NAME_LENGTH, MAX_PLAYERS, MIN_PLAYERS, ROOM_CODE_LENGTH, TICK_MS, CHAT_INTERVAL_MS, MAX_CHAT_LENGTH,
 } from '../shared/constants';
@@ -28,6 +29,7 @@ export interface Member {
   id: string;
   name: string;
   color: number;
+  hat: number;
   token: string;
   ws: WebSocket | null;
   connected: boolean;
@@ -84,6 +86,7 @@ export class ServerRoom {
         id: m.id,
         name: m.name,
         color: m.color,
+        hat: m.hat,
         connected: m.connected,
         isHost: m.id === this.hostId,
       })),
@@ -105,6 +108,7 @@ export class ServerRoom {
       id,
       name: cleanName(name),
       color: this.freeColor(),
+      hat: 0,
       token,
       ws,
       connected: true,
@@ -166,6 +170,11 @@ export class ServerRoom {
         m.color = msg.color;
         this.lobbyDirty = true;
         return;
+      case 'setHat':
+        if (this.game || !isHat(msg.hat)) return;
+        m.hat = msg.hat;
+        this.lobbyDirty = true;
+        return;
       case 'setSettings':
         if (!isHost || this.game) return;
         this.settings = applySettingsPatch(this.settings, msg.patch);
@@ -220,7 +229,7 @@ export class ServerRoom {
     }
     this.game = new Game(
       {
-        players: players.map((m) => ({ id: m.id, name: m.name, color: m.color })),
+        players: players.map((m) => ({ id: m.id, name: m.name, color: m.color, hat: m.hat })),
         settings: { ...this.settings },
         seed: Math.floor(Math.random() * 2 ** 31),
         now,

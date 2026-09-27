@@ -47,7 +47,7 @@ function RoleReveal() {
     <div className="cutscene reveal">
       {stage === 0 ? (
         <div className="shhh">
-          <CrewmateSvg color={me?.color ?? 0} size={150} />
+          <CrewmateSvg color={me?.color ?? 0} hat={me?.hat} size={150} />
           <div className="shhh-text outline-text">Shhhhh!</div>
         </div>
       ) : (
@@ -65,7 +65,7 @@ function RoleReveal() {
               const off = i - (lineup.length - 1) / 2;
               return (
                 <div key={p.id} className="lineup-item" style={{ zIndex: 20 - Math.abs(off), transform: `translateY(${Math.abs(off) * -6}px) scale(${center ? 1.25 : 1 - Math.abs(off) * 0.05})` }}>
-                  <CrewmateSvg color={p.color} size={80} facing={off < 0 ? 1 : -1} />
+                  <CrewmateSvg color={p.color} hat={p.hat} size={80} facing={off < 0 ? 1 : -1} />
                   <span className="lineup-name" style={{ color: imp ? '#ff5b5b' : '#fff' }}>
                     {p.name}
                   </span>
@@ -170,7 +170,7 @@ function GameOver() {
       <div className="lineup">
         {winners.map((p) => (
           <div key={p.id} className="lineup-item">
-            <CrewmateSvg color={p.color} size={80} dead={p.dead && false} ghost={p.dead} />
+            <CrewmateSvg color={p.color} hat={p.hat} size={80} dead={p.dead && false} ghost={p.dead} />
             <span className="lineup-name" style={{ color: winner === 'impostors' ? '#ff5b5b' : '#8cf' }}>
               {p.name}
             </span>

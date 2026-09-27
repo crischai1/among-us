@@ -26,7 +26,7 @@ export function ShapeshiftPicker() {
                 closeOverlay();
               }}
             >
-              <CrewmateSvg color={p.color} size={56} />
+              <CrewmateSvg color={p.color} hat={p.hat} size={56} />
               <span>{p.name}</span>
             </button>
           ))}

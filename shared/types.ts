@@ -41,6 +41,7 @@ export interface LobbyMember {
   id: string;
   name: string;
   color: number;
+  hat: number;
   connected: boolean;
   isHost: boolean;
 }
@@ -60,6 +61,7 @@ export interface PubPlayer {
   id: string;
   name: string;
   color: number;
+  hat: number;
   /** Dead as far as this viewer is allowed to know. */
   dead: boolean;
   disconnected: boolean;
@@ -189,8 +191,8 @@ export interface PrivState {
 
 /** [entityId, x, y, flags, lookIndex] – lookIndex indexes the current roster. */
 export type EntTuple = [number, number, number, number, number];
-/** [bodyId, x, y, color, diedAt] – diedAt is server time, for the fall animation. */
-export type BodyTuple = [number, number, number, number, number];
+/** [bodyId, x, y, color, diedAt, hat] – diedAt is server time, for the fall animation. */
+export type BodyTuple = [number, number, number, number, number, number];
 
 export const F_GHOST = 1;
 export const F_SCANNING = 2;

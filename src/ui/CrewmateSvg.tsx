@@ -1,7 +1,10 @@
 import { colorOf } from '../../shared/colors';
+import { hatOf } from '../../shared/cosmetics';
 
 interface Props {
   color: number;
+  /** Index into HATS. */
+  hat?: number;
   size?: number;
   dead?: boolean;
   ghost?: boolean;
@@ -11,7 +14,7 @@ interface Props {
 }
 
 /** SVG crewmate for menus, meeting cards and cutscenes (matches the canvas drawing). */
-export function CrewmateSvg({ color, size = 48, dead, ghost, facing = 1, className, style }: Props) {
+export function CrewmateSvg({ color, hat = 0, size = 48, dead, ghost, facing = 1, className, style }: Props) {
   const c = colorOf(color);
   return (
     <svg
@@ -42,6 +45,16 @@ export function CrewmateSvg({ color, size = 48, dead, ghost, facing = 1, classNa
             <ellipse cx={6} cy={-26} rx={9} ry={6} fill="#4e7a93" />
             <ellipse cx={6.5} cy={-27} rx={7.5} ry={4.3} fill="#93c9e0" stroke="none" />
             <ellipse cx={9} cy={-28.5} rx={3.2} ry={1.6} fill="rgba(255,255,255,0.9)" stroke="none" />
+            {hatOf(hat).parts.map((p, i) => (
+              <path
+                key={i}
+                d={p.d}
+                fill={p.fill === 'body' ? c.body : p.fill === 'shadow' ? c.shadow : p.fill}
+                stroke={p.stroke}
+                strokeWidth={p.width}
+                strokeLinecap="round"
+              />
+            ))}
           </>
         )}
       </g>
