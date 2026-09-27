@@ -75,6 +75,16 @@ async function createRoom(name = 'Host') {
 }
 
 describe('room server', () => {
+  it('healthz counts rooms with someone connected', async () => {
+    const rooms = async () =>
+      ((await (await fetch(`http://127.0.0.1:${PORT}/healthz`)).json()) as { rooms: number }).rooms;
+    const before = await rooms();
+    const { host } = await createRoom();
+    expect(await rooms()).toBe(before + 1);
+    await host.close();
+    await expect.poll(rooms).toBe(before);
+  });
+
   it('rejects unknown rooms', async () => {
     const c = await connect();
     c.send({ t: 'join', code: 'ZZZZZZ', name: 'x' });

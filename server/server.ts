@@ -46,7 +46,9 @@ function laggy(sim: { lagMs: number; jitterMs: number }) {
 
 /** HTTP (static client) and WebSocket (/ws) on one port. */
 export function createAppServer(opts: AppServerOptions): Promise<AppServer> {
-  const http = createHttpServer(opts.distDir ?? 'dist', opts.devClientPort);
+  const http = createHttpServer(opts.distDir ?? 'dist', opts.devClientPort, () => ({
+    rooms: [...rooms.values()].filter((r) => [...r.members.values()].some((m) => m.connected)).length,
+  }));
   const wss = new WebSocketServer({ server: http, path: '/ws', maxPayload: 8 * 1024 });
   const rooms = new Map<string, ServerRoom>();
   const alive = new WeakMap<WebSocket, boolean>();

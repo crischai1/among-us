@@ -19,13 +19,18 @@ const MIME: Record<string, string> = {
  * With `devClientPort`, page requests redirect to the Vite dev server instead of
  * serving a possibly stale build from dist/.
  */
-export function createHttpServer(distDir: string, devClientPort?: number) {
+export function createHttpServer(
+  distDir: string,
+  devClientPort?: number,
+  stats: () => { rooms: number } = () => ({ rooms: 0 }),
+) {
   const root = resolve(distDir);
   return createServer((req: IncomingMessage, res: ServerResponse) => {
     const url = new URL(req.url ?? '/', 'http://x');
     if (url.pathname === '/healthz') {
-      res.writeHead(200, { 'content-type': 'text/plain' });
-      res.end('ok');
+      // rooms: the deploy script waits for 0 before restarting, since rooms live in memory.
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ ok: true, ...stats() }));
       return;
     }
     if (devClientPort) {
