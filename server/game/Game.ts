@@ -80,6 +80,9 @@ export class Game {
   commsSeed = 0;
   private commsWin = -1;
 
+  /** Runs at the start of every simulation tick (server-played bots queue their input here). */
+  beforeTick: (() => void) | null = null;
+
   private pubDirty = true;
   private privDirty = new Set<string>();
   private nextConsoleRefresh = 0;
@@ -245,6 +248,7 @@ export class Game {
     while (this.simTime + TICK_MS <= now) {
       this.simTime += TICK_MS;
       this.now = this.simTime;
+      this.beforeTick?.();
       this.tick();
     }
     this.now = Math.max(this.now, now);

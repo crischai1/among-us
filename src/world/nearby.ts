@@ -47,6 +47,12 @@ export function computeNearby(): Nearby {
     return { ...EMPTY_NEARBY, vent: priv.venting };
   }
 
+  // Security, admin, vitals and the door log work for ghosts too.
+  for (const st of map.def.stations) {
+    if (st.kind === 'cams' || st.kind === 'admin' || st.kind === 'vitals' || st.kind === 'doorlog') {
+      considerStation({ kind: 'console', id: st.kind, label: CONSOLE_LABEL[st.kind] }, st);
+    }
+  }
   if (!imp) {
     const now = serverNow();
     for (const t of priv.tasks) {
@@ -60,11 +66,6 @@ export function computeNearby(): Nearby {
       for (const id of pub.sabotage.stations) {
         const st = map.stations.get(id);
         if (st) considerStation({ kind: 'fix', id, label: 'Fix' }, st);
-      }
-    }
-    for (const st of map.def.stations) {
-      if (st.kind === 'cams' || st.kind === 'admin' || st.kind === 'vitals' || st.kind === 'doorlog') {
-        considerStation({ kind: 'console', id: st.kind, label: CONSOLE_LABEL[st.kind] }, st);
       }
     }
     const btn = map.def.button;

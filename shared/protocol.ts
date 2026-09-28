@@ -10,6 +10,7 @@ export type ClientMessage =
   | { t: 'setSettings'; patch: Record<string, unknown> }
   | { t: 'start' }
   | { t: 'kick'; id: string }
+  | { t: 'addBot' }
   | { t: 'devRole'; role: Role | null }
   | { t: 'input'; seq: number; dx: number; dy: number }
   | { t: 'ping'; c: number }

@@ -32,7 +32,8 @@ export function buildPub(g: Game, viewer: SPlayer): PubState {
       ? { ...g.sabotage, stations: [...g.sabotage.stations], lights: g.sabotage.lights && [...g.sabotage.lights] }
       : null,
     doors: Object.fromEntries(g.doors),
-    camsInUse: !g.commsDown && g.players.some((p) => p.console === 'cams' && p.connected),
+    // Ghosts watching don't light up the cameras.
+    camsInUse: !g.commsDown && g.players.some((p) => p.console === 'cams' && p.connected && p.alive),
     buttonReadyAt: g.buttonReadyAt,
     meeting: m
       ? {

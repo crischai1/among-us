@@ -83,6 +83,9 @@
 .lobby-count ul { list-style: none; margin: 6px 0 0; padding: 0; font-size: 14px; max-height: 40vh; overflow: auto; }
 .lobby-count li { padding: 2px 0; display: flex; align-items: center; gap: 4px; }
 .lobby-count li.dim { opacity: 0.45; }
+.lobby-count .add-bot { margin-top: 8px; width: 100%; }
+.beta-note { margin-top: 6px; max-width: 200px; font-size: 11px; line-height: 1.35; opacity: 0.8; }
+.beta-tag { display: inline-block; padding: 0 5px; margin-right: 3px; border-radius: 4px; background: var(--accent); color: #111; font-weight: 900; font-size: 10px; letter-spacing: 0.5px; }
 .kick { margin-left: auto; background: none; border: none; color: var(--bad); cursor: pointer; font-weight: 900; }
 .leave { margin-left: auto; }
 .lobby-bottom { position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%); display: flex; gap: 12px; align-items: center; flex-wrap: wrap; justify-content: center; }
@@ -128,7 +131,7 @@
 .hat-name { color: var(--muted); font-size: 14px; }
 .customize-body { display: flex; flex-direction: column; gap: 12px; min-height: 196px; }
 .customize-tabs { display: flex; gap: 8px; }
-.hat-grid { display: grid; grid-template-columns: repeat(5, 56px); gap: 8px; }
+.hat-grid { display: grid; grid-template-columns: repeat(5, 56px); gap: 8px; max-height: 296px; overflow-y: auto; padding: 4px 6px 4px 4px; }
 .hat-swatch { width: 56px; height: 64px; border-radius: 10px; border: 3px solid #000; background: rgba(255,255,255,0.08); cursor: pointer; display: flex; align-items: flex-end; justify-content: center; padding: 0 0 4px; }
 .hat-swatch.selected { border-color: #fff; box-shadow: 0 0 0 3px #fff; }
 .hat-swatch:hover { background: rgba(255,255,255,0.16); }

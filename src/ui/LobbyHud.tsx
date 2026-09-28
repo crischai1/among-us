@@ -46,16 +46,27 @@ export function LobbyHud() {
             {room.members.map((m) => (
               <li key={m.id} className={m.connected ? '' : 'dim'}>
                 {m.isHost && '👑 '}
+                {m.bot && <span title="Bot">🤖 </span>}
                 {m.name}
                 {m.id === selfId && ' (you)'}
                 {isHost && m.id !== selfId && (
-                  <button className="kick" title="Kick" onClick={() => send({ t: 'kick', id: m.id })}>
+                  <button className="kick" title={m.bot ? 'Remove bot' : 'Kick'} onClick={() => send({ t: 'kick', id: m.id })}>
                     ✕
                   </button>
                 )}
               </li>
             ))}
           </ul>
+          {isHost && room.members.length < MAX_PLAYERS && (
+            <button className="btn small add-bot" onClick={() => send({ t: 'addBot' })}>
+              ＋ Add bot
+            </button>
+          )}
+          {(isHost || room.members.some((m) => m.bot)) && (
+            <div className="beta-note">
+              <span className="beta-tag">BETA</span> Bots are experimental: they may get stuck or play oddly.
+            </div>
+          )}
         </div>
         <button className="btn small danger leave" onClick={leaveRoom}>
           Leave

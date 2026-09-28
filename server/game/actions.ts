@@ -252,7 +252,8 @@ function consoleUse(g: Game, p: SPlayer, kind: ConsoleKind, open: boolean): void
     }
     return;
   }
-  if (!canAct(g, p)) return;
+  // Ghosts can watch too (cams, admin, vitals, door log).
+  if (g.phase !== 'playing' || !p.connected || p.venting) return;
   // Any panel of that kind works, in case a map has more than one.
   if (!g.map.def.stations.some((s) => s.kind === kind && g.atStation(p, s))) return;
   if (g.commsDown && kind !== 'vitals') return;

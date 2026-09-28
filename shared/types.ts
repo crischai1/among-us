@@ -44,6 +44,8 @@ export interface LobbyMember {
   hat: number;
   connected: boolean;
   isHost: boolean;
+  /** Played by the server. */
+  bot: boolean;
 }
 
 export interface RoomState {

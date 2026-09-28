@@ -18,12 +18,15 @@ A browser-based Among Us clone with real-time online multiplayer. Everything is 
     - 6 security cameras, vitals in the Office, and an admin map that ignores anyone out in the snow;
     - 4 vent networks; you start in the Dropship and meet around the Office table.
   - The admin table can be used from any side of it, on every map.
+  - Ghosts can use security cameras, the admin table, vitals and the door log too. A ghost watching the cameras doesn't turn on the camera light.
   - Each map file (`shared/map/skeld.ts`, `shared/map/mira.ts`, `shared/map/polus.ts`) lists its sabotages and task recipes (one station pool per task step) alongside the layout.
 - **Tasks:** 37 mini-games. The Skeld: Fix Wiring, Swipe Card, Calibrate Distributor, Divert Power, Download/Upload Data, Align Engine, Stabilize Steering, Fuel Engines, Clear Asteroids, Empty Garbage, Submit Scan and Start Reactor. MIRA HQ adds Enter ID Code, Run Diagnostics (start it, come back a minute later), Water Plants, Buy Beverage, Measure Weather, Sort Samples, Assemble Artifact, Process Data, Unlock Manifolds, Clean O2 Filter, Prime Shields and Chart Course. Polus adds Insert Keys, Scan Boarding Pass, Align Telescope, Fill Canisters, Fix Weather Node, Monitor Tree, Open Waterways, Reboot Wifi, Record Temperature, Repair Drill, Replace Water Jug, Store Artifacts and Inspect Sample (Reboot Wifi and Inspect Sample make you come back after a minute).
 - **Sabotage:** Lights, Reactor (Seismic Stabilizers on Polus), O2, Comms, and Doors (The Skeld and Polus).
 - **Meetings:** emergency button and body reports, discussion and voting timers, meeting chat and ghost-only chat, skip votes, anonymous votes, confirm ejects.
 - **Cutscenes:** role reveal, meeting splash, kill animation, ejection, and victory/defeat.
 - **Settings:** the host controls the full lobby settings panel.
+- **Cosmetics:** 18 colours and 21 hats, picked from the laptop or the 🎨 Customize button in the lobby.
+- **Bots (beta):** the host can fill seats with **＋ Add bot** in the lobby (and remove one with ✕). Bots count toward the 4-player minimum. See [Bots](#bots).
 
 ## Controls
 
@@ -100,6 +103,28 @@ Rooms live in memory, so **run exactly one instance**.
 - **Any Docker host:** `docker build -t among-us . && docker run -p 8080:8080 among-us`.
 
 `/healthz` returns `ok` for health checks.
+
+## Bots
+
+> **Beta:** bots are experimental. They may get stuck on some corners, and they play a simple strategy.
+
+Bots run on the server (`server/bots/`) and play through the same messages a browser sends, so every move is checked like a real player's. They only react to what their character could see.
+
+- **Crewmates** walk to their tasks (A* over the map grid), fix sabotages (they split up for reactor and O2), open Polus doors, report bodies, and call the emergency button after seeing someone vent.
+- **Impostors** pretend to do tasks, kill when nobody (or occasionally only one person) is watching, sometimes vent away, and sabotage.
+- **Meetings:** bots say where they were and what they saw (a kill, a vent, who was near the body or last with the victim), defend themselves when accused, and vote from their evidence plus the accusations in chat. Impostors lie and never vote for each other.
+- A room with only bots left is closed.
+
+Meeting chat uses built-in lines by default, with no network calls. For more natural chat, set a **free-tier** LLM key on the server (it is never sent to clients). Put it in a `.env` file in the project root (copy `.env.example`; `.env` is git-ignored) or set it as a real environment variable, which takes precedence. The server logs which chat mode it's using at startup.
+
+| Variable | Meaning |
+| --- | --- |
+| `BOT_LLM_KEY` | API key. Unset = built-in lines only. |
+| `BOT_LLM_PROVIDER` | `groq` (default, free key at console.groq.com) or `gemini` (free key at aistudio.google.com). |
+| `BOT_LLM_MODEL` | Override the model (defaults: `llama-3.1-8b-instant`, `gemini-2.0-flash`). |
+| `BOT_LLM_RPM` | Requests per minute to stay under (defaults: 25 for Groq, 12 for Gemini). |
+
+Requests time out after 4 s. If the key is missing, the free limit is reached, or the API fails, bots fall back to the built-in lines.
 
 ## How it works
 

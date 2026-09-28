@@ -181,12 +181,11 @@ export function startLoop(canvas: HTMLCanvasElement): () => void {
         for (const tk of priv.tasks) if (!tk.done) marks.tasks.set(tk.stationId, taskReady(tk, now) ? TASK_THEME[tk.type].icon : '⏳');
       }
       if (!ghost && pub.sabotage) for (const id of pub.sabotage.stations) marks.sabotage.add(id);
-      if (!ghost) {
-        for (const st of map.def.stations) {
-          const icon = CONSOLE_ICON[st.kind as keyof typeof CONSOLE_ICON];
-          // Comms sabotage knocks out cameras and admin, so they aren't usable then.
-          if (icon && (st.kind === 'vitals' || !priv.commsDown)) marks.consoles.set(st.id, icon);
-        }
+      // Consoles work for ghosts too.
+      for (const st of map.def.stations) {
+        const icon = CONSOLE_ICON[st.kind as keyof typeof CONSOLE_ICON];
+        // Comms sabotage knocks out cameras and admin, so they aren't usable then.
+        if (icon && (st.kind === 'vitals' || !priv.commsDown)) marks.consoles.set(st.id, icon);
       }
       if (nearby.use && (nearby.use.kind === 'task' || nearby.use.kind === 'fix')) marks.inRange = nearby.use.id;
       if (nearby.use?.kind === 'console') {

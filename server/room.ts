@@ -1,6 +1,6 @@
 import type { WebSocket } from 'ws';
 import { COLORS } from '../shared/colors';
-import { isHat } from '../shared/cosmetics';
+import { HATS, isHat } from '../shared/cosmetics';
 import {
   GAME_GRACE_MS, LOBBY_GRACE_MS, MAX_NAME_LENGTH, MAX_PLAYERS, MIN_PLAYERS, ROOM_CODE_LENGTH, TICK_MS, CHAT_INTERVAL_MS, MAX_CHAT_LENGTH,
 } from '../shared/constants';
@@ -9,6 +9,7 @@ import type { ClientMessage, ServerMessage } from '../shared/protocol';
 import { applySettingsPatch, DEFAULT_SETTINGS, type GameSettings } from '../shared/settings';
 import { stepPlayer } from '../shared/sim/movement';
 import { ROLES, type EntTuple, type Role, type RoomState } from '../shared/types';
+import { BOT_NAMES, BotBrain, BotTeam } from './bots/BotBrain';
 import { Game } from './game/Game';
 import { INPUT_BURST, queueInput, takeInputs, type Input } from './game/types';
 
@@ -43,6 +44,8 @@ export interface Member {
   inputs: Input[];
   lastSeq: number;
   inputBudget: number;
+  /** Set for server-played members, which have no socket. */
+  bot?: BotBrain;
 }
 
 /** Above this much unsent data, skip snapshots: a newer one replaces them anyway. */
@@ -64,6 +67,8 @@ export class ServerRoom {
   private simTime = 0;
   private nextEid = 1;
   private lobbyDirty = true;
+  private nextBot = 1;
+  private botTeam = new BotTeam();
 
   constructor(
     readonly code: string,
@@ -74,8 +79,17 @@ export class ServerRoom {
     return this.members.size;
   }
 
+  /** Members played by people (connected or within their grace period). */
+  get humanCount(): number {
+    let n = 0;
+    for (const m of this.members.values()) if (!m.bot) n++;
+    return n;
+  }
+
   send(id: string, msg: ServerMessage): void {
-    sendWs(this.members.get(id)?.ws ?? null, msg);
+    const m = this.members.get(id);
+    if (m?.bot) m.bot.onMessage(msg);
+    else sendWs(m?.ws ?? null, msg);
   }
 
   roomState(): RoomState {
@@ -89,6 +103,7 @@ export class ServerRoom {
         hat: m.hat,
         connected: m.connected,
         isHost: m.id === this.hostId,
+        bot: !!m.bot,
       })),
       settings: this.settings,
       inGame: !!this.game,
@@ -129,6 +144,37 @@ export class ServerRoom {
     return m;
   }
 
+  /** Add a server-played member. Returns it, or null if the room is full or in a game. */
+  addBot(): Member | null {
+    if (this.game || this.members.size >= MAX_PLAYERS) return null;
+    const taken = new Set([...this.members.values()].map((m) => m.name.toLowerCase()));
+    const free = BOT_NAMES.filter((n) => !taken.has(n.toLowerCase()));
+    const name = free.length ? free[Math.floor(Math.random() * free.length)] : `Bot ${this.nextBot}`;
+    const sp = spawnPoint(getLobby().def, this.members.size, MAX_PLAYERS);
+    const m: Member = {
+      id: `bot${this.nextBot++}-${Math.random().toString(36).slice(2, 8)}`,
+      name,
+      color: this.freeColor(),
+      hat: Math.floor(Math.random() * HATS.length),
+      token: '',
+      ws: null,
+      connected: true,
+      disconnectedAt: 0,
+      lastChatAt: 0,
+      eid: this.nextEid++,
+      x: sp.x,
+      y: sp.y,
+      gen: 1,
+      inputs: [],
+      lastSeq: 0,
+      inputBudget: INPUT_BURST,
+      bot: new BotBrain(Math.floor(Math.random() * 2 ** 31)),
+    };
+    this.members.set(m.id, m);
+    this.lobbyDirty = true;
+    return m;
+  }
+
   rebind(m: Member, ws: WebSocket): void {
     if (m.ws && m.ws !== ws) m.ws.close();
     m.ws = ws;
@@ -155,7 +201,8 @@ export class ServerRoom {
     delete this.forcedRoles[id];
     this.game?.removePlayer(id);
     if (this.hostId === id) {
-      const next = [...this.members.values()].find((m) => m.connected) ?? [...this.members.values()][0];
+      const humans = [...this.members.values()].filter((m) => !m.bot);
+      const next = humans.find((m) => m.connected) ?? humans[0];
       this.hostId = next?.id ?? '';
     }
     this.lobbyDirty = true;
@@ -189,6 +236,9 @@ export class ServerRoom {
         this.removeMember(target.id);
         return;
       }
+      case 'addBot':
+        if (isHost) this.addBot();
+        return;
       case 'devRole':
         if (!this.dev) return;
         if (msg.role && ROLES.includes(msg.role)) this.forcedRoles[m.id] = msg.role;
@@ -238,8 +288,18 @@ export class ServerRoom {
       },
       (id, msg) => this.send(id, msg),
     );
+    // Bots act once per simulation tick, so they send exactly one input per tick like a real client.
+    const game = this.game;
+    game.beforeTick = () => {
+      for (const m of this.members.values()) {
+        const p = m.bot && game.byId.get(m.id);
+        if (p) m.bot!.tick(game, p, game.now, this.botTeam);
+      }
+    };
     // Anyone disconnected at start is left out of the match.
     for (const m of this.members.values()) if (!m.connected) this.removeMember(m.id);
+    this.botTeam = new BotTeam();
+    for (const m of this.members.values()) m.bot?.reset();
     this.lobbyDirty = true;
     return true;
   }
@@ -250,6 +310,12 @@ export class ServerRoom {
       if (m.connected) continue;
       const grace = this.game ? GAME_GRACE_MS : LOBBY_GRACE_MS;
       if (now - m.disconnectedAt > grace) this.removeMember(m.id);
+    }
+    // Bots don't keep a room alive on their own.
+    if (this.members.size && !this.humanCount) {
+      this.members.clear();
+      this.game = null;
+      return;
     }
 
     if (this.game) {

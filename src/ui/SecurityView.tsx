@@ -26,7 +26,8 @@ export function SecurityView() {
           ctx.putImageData(img, 0, 0);
           return;
         }
-        renderViewport(ctx, cam.view, t, roster(), true);
+        // The cameras' red light is on only while a living player watches (not for a ghost alone).
+        renderViewport(ctx, cam.view, t, roster(), !!useGame.getState().pub?.camsInUse);
       });
     };
     raf = requestAnimationFrame(frame);
