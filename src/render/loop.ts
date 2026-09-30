@@ -13,7 +13,7 @@ import { useSession } from '../store/session';
 import { computeNearby, sameNearby } from '../world/nearby';
 import { easeAmp, jitter, moveCtx, updateEnts, WALK_RATE, world } from '../world/world';
 import { drawDebug, debugEnabled, debugState } from './debug';
-import { drawFog } from './fog';
+import { drawFog, makeLight, type Light } from './fog';
 import { drawHighlight, drawStationMarks, type StationMarks } from './props';
 import { TASK_THEME } from '../tasks/theme';
 import { drawSceneEntities, drawSceneFloor, drawSceneTop, drawTags, type Look } from './scene';
@@ -168,12 +168,15 @@ export function startLoop(canvas: HTMLCanvasElement): () => void {
     const fogOn = inGame && !ghost && !(debugEnabled && debugState.noFog);
     const radius = fogOn ? visionRadius(now) : Infinity;
     const doors = doorSegs(map, world.closedDoors);
-    const visible = (x: number, y: number) => {
-      if (!fogOn) return true;
-      const d = dist(s.x, s.y, x, y);
-      if (d > radius + 30) return false;
-      return hasLineOfSight(s.x, s.y, x, y - 12, map.visionGrid, doors) || hasLineOfSight(s.x, s.y, x, y - 34, map.visionGrid, doors);
-    };
+    const inRange = (x: number, y: number) => !fogOn || dist(s.x, s.y, x, y) <= radius + 30;
+    // Stations sit on walls, so check a couple of heights above their foot.
+    const visible = (x: number, y: number) =>
+      inRange(x, y) &&
+      (!fogOn || hasLineOfSight(s.x, s.y, x, y - 12, map.visionGrid, doors) || hasLineOfSight(s.x, s.y, x, y - 34, map.visionGrid, doors));
+    // People are judged by their feet, which are always on open floor; the tag
+    // shows while any of their body is still in the light.
+    const feetVisible = (x: number, y: number) =>
+      !fogOn || (Math.min(dist(s.x, s.y, x, y), dist(s.x, s.y, x, y - 40)) <= radius * 0.95 && hasLineOfSight(s.x, s.y, x, y - 4, map.visionGrid, doors));
 
     const marks: StationMarks = { tasks: new Map(), sabotage: new Set(), consoles: new Map(), inRange: null };
     if (inGame && priv && pub?.phase === 'playing' && !priv.venting) {
@@ -200,6 +203,7 @@ export function startLoop(canvas: HTMLCanvasElement): () => void {
       if (st) drawHighlight(ctx, st.x, st.y, nearby.use.kind === 'button' ? 30 : 22, t);
     }
 
+    let light: Light | undefined;
     if (fogOn) {
       const key = `${Math.round(s.x)},${Math.round(s.y)},${Math.round(radius)},${world.closedDoors.join()}`;
       if (!polyCache || polyCache.key !== key) {
@@ -209,6 +213,7 @@ export function startLoop(canvas: HTMLCanvasElement): () => void {
       const oy = H / 2 - camera.y * k;
       const poly = polyCache.poly.map((p) => ({ x: p.x * k + ox + (sx - s.x) * k, y: p.y * k + oy + (sy - s.y) * k }));
       drawFog(ctx, poly, sx * k + ox, (sy - 10) * k + oy, radius * k);
+      light = makeLight(poly, sx * k + ox, (sy - 10) * k + oy, radius * k, k, ox, oy, W, H, wallsPath(map));
     }
 
     drawSceneTop(ctx, { map, t, closedDoors: world.closedDoors, camsInUse: !!pub?.camsInUse });
@@ -233,8 +238,10 @@ export function startLoop(canvas: HTMLCanvasElement): () => void {
         ? null
         : { x: sx, y: sy, look: shiftedLook ?? selfLook, flags: s.flags, facing: s.facing, walk: s.walk, amp: s.amp, red: !!priv && isImpostorRole(priv.role) },
       ghostView: ghost || !inGame,
-      visible,
-      fade: fogOn ? (x, y) => clamp((radius - dist(s.x, s.y, x, y)) / (radius * 0.22) + 0.15, 0, 1) : undefined,
+      // Occlusion and range are left to the light, which can show part of someone.
+      visible: inRange,
+      tagVisible: feetVisible,
+      light,
       ventHighlight: nearby.vent,
       camsInUse: !!pub?.camsInUse,
       killTarget: priv && isImpostorRole(priv.role) && now >= priv.killReadyAt ? nearby.kill : null,

@@ -5,6 +5,7 @@ import { serverNow } from '../net/clock';
 import { world } from '../world/world';
 import { drawBody, drawCrewmate, drawKillOutline, drawNameTag } from './crewmate';
 import { drawFloors, drawWalls } from './mapLayer';
+import type { Light, Paint } from './fog';
 import { drawCameras, drawDecals, drawDecon, drawDoors, drawProps, drawSensors, drawVents } from './props';
 
 export interface Look {
@@ -24,10 +25,12 @@ export interface SceneOpts {
   self: { x: number; y: number; look: Look; flags: number; facing: 1 | -1; walk: number; amp: number; red: boolean } | null;
   /** Show ghosts (viewer is dead) */
   ghostView: boolean;
-  /** Filter for whether a point is visible to the viewer. */
+  /** Whether an entity standing at a point could be seen at all (cheap cull). */
   visible: (x: number, y: number) => boolean;
-  /** Opacity for a point near the edge of vision (1 = fully visible). */
-  fade?: (x: number, y: number) => number;
+  /** Whether a name tag shows for someone standing at a point (defaults to `visible`). */
+  tagVisible?: (x: number, y: number) => boolean;
+  /** Draw others through the viewer's light rather than plainly. */
+  light?: Light;
   ventHighlight: string | null;
   camsInUse: boolean;
   /** Entity the impostor can kill right now: drawn with a red outline. */
@@ -52,21 +55,16 @@ export function drawSceneFloor(ctx: CanvasRenderingContext2D, map: CompiledMap, 
 
 /** Bodies and players, y-sorted, drawn above walls (already filtered by line of sight). */
 export function drawSceneEntities(ctx: CanvasRenderingContext2D, o: SceneOpts): { x: number; y: number; name: string; color: string }[] {
-  const fade = o.fade ?? (() => 1);
+  const tagVisible = o.tagVisible ?? o.visible;
+  const put = (x: number, y: number, paint: Paint) => (o.light ? o.light.draw(ctx, x, y, paint) : paint(ctx));
   const items: Drawable[] = [];
   const tags: { x: number; y: number; name: string; color: string }[] = [];
   const now = serverNow();
   for (const b of world.bodies.values()) {
     if (!o.visible(b.x, b.y)) continue;
-    const a = fade(b.x, b.y);
     items.push({
       y: b.y - 20,
-      draw: () => {
-        ctx.save();
-        ctx.globalAlpha = a;
-        drawBody(ctx, b.x, b.y, colorOf(b.color), now - b.at, b.hat);
-        ctx.restore();
-      },
+      draw: () => put(b.x, b.y, (c) => drawBody(c, b.x, b.y, colorOf(b.color), now - b.at, b.hat)),
     });
   }
   for (const e of world.ents.values()) {
@@ -77,20 +75,20 @@ export function drawSceneEntities(ctx: CanvasRenderingContext2D, o: SceneOpts): 
     if (!look) continue;
     const color = colorOf(look.color);
     const scanning = (e.flags & F_SCANNING) !== 0;
-    const a = e.alpha * fade(e.x, e.y);
     items.push({
       y: e.y,
-      draw: () => {
-        ctx.save();
-        ctx.globalAlpha = a;
-        const pose = { facing: e.facing, walk: e.walk, amp: e.amp, ghost, hat: look.hat };
-        if (e.eid === o.killTarget) drawKillOutline(ctx, e.x, e.y, color, pose);
-        drawCrewmate(ctx, e.x, e.y, color, pose);
-        if (scanning) drawScan(ctx, e.x, e.y, o.t);
-        ctx.restore();
-      },
+      draw: () =>
+        put(e.x, e.y, (c) => {
+          c.save();
+          c.globalAlpha = e.alpha;
+          const pose = { facing: e.facing, walk: e.walk, amp: e.amp, ghost, hat: look.hat };
+          if (e.eid === o.killTarget) drawKillOutline(c, e.x, e.y, color, pose);
+          drawCrewmate(c, e.x, e.y, color, pose);
+          if (scanning) drawScan(c, e.x, e.y, o.t);
+          c.restore();
+        }),
     });
-    if (o.names && a > 0.3) tags.push({ x: e.x, y: e.y - tagLift(look), name: look.name, color: e.flags & F_TEAMMATE ? '#ff4b4b' : '#ffffff' });
+    if (o.names && e.alpha > 0.3 && tagVisible(e.x, e.y)) tags.push({ x: e.x, y: e.y - tagLift(look), name: look.name, color: e.flags & F_TEAMMATE ? '#ff4b4b' : '#ffffff' });
   }
   const s = o.self;
   if (s) {
