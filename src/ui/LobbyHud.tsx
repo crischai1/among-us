@@ -5,14 +5,16 @@ import { doUse, openOverlay } from '../game/actions';
 import { leaveRoom, send } from '../net/session';
 import { useGame } from '../store/game';
 import { useSession } from '../store/session';
-import { Chat } from './Chat';
+import { isTouchDevice } from '../input/touch';
+import { Chat, useOnOpenChat } from './Chat';
 
 export function LobbyHud() {
   const room = useSession((s) => s.room);
   const selfId = useSession((s) => s.selfId);
   const use = useGame((s) => s.nearby.use);
   const [copied, setCopied] = useState(false);
-  const [chatOpen, setChatOpen] = useState(true);
+  const [chatOpen, setChatOpen] = useState(!isTouchDevice);
+  useOnOpenChat(() => setChatOpen(true));
   const [devRole, setDevRole] = useState<Role | ''>(() => (new URLSearchParams(location.search).get('role') as Role) ?? '');
   if (!room) return null;
   const isHost = room.hostId === selfId;
@@ -74,7 +76,7 @@ export function LobbyHud() {
       </div>
 
       <div className="lobby-chat">
-        <button className="btn small" onClick={() => setChatOpen(!chatOpen)}>
+        <button className="btn small" title="Chat (/)" onClick={() => setChatOpen(!chatOpen)}>
           {chatOpen ? 'Hide chat' : 'Chat'}
         </button>
         {chatOpen && <Chat channels={['lobby']} canSend className="panel" />}
@@ -116,7 +118,7 @@ export function LobbyHud() {
         )}
         {use?.kind === 'laptop' && (
           <button className="btn blue" onClick={doUse}>
-            USE (E)
+            {isTouchDevice ? 'USE' : 'USE (E)'}
           </button>
         )}
       </div>

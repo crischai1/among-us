@@ -15,12 +15,15 @@
 
 * { box-sizing: border-box; }
 html, body, #root { margin: 0; height: 100%; }
+/* No double-tap zoom, rubber-banding, tap flashes or long-press callouts on touch screens. */
+html { touch-action: manipulation; overscroll-behavior: none; -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; }
 body {
   background: var(--bg);
   color: var(--text);
   font-family: var(--font);
   overflow: hidden;
   user-select: none;
+  -webkit-user-select: none;
   -webkit-font-smoothing: antialiased;
 }
 button { font-family: inherit; }

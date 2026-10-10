@@ -1,4 +1,6 @@
 /** Keyboard state for movement plus one-shot action keys. */
+import { stickInput } from './touch';
+
 const down = new Set<string>();
 type ActionHandler = (key: string, e: KeyboardEvent) => void;
 const handlers = new Set<ActionHandler>();
@@ -43,5 +45,6 @@ export function moveInput(): { dx: number; dy: number } {
   const r = down.has('d') || down.has('arrowright');
   const u = down.has('w') || down.has('arrowup');
   const d = down.has('s') || down.has('arrowdown');
-  return { dx: (r ? 1 : 0) - (l ? 1 : 0), dy: (d ? 1 : 0) - (u ? 1 : 0) };
+  if (l || r || u || d) return { dx: (r ? 1 : 0) - (l ? 1 : 0), dy: (d ? 1 : 0) - (u ? 1 : 0) };
+  return stickInput();
 }

@@ -125,7 +125,7 @@ export function MapOverlay() {
   const sabCd = Math.max(0, Math.ceil((priv.sabotageReadyAt - now) / 1000));
 
   return (
-    <div className="overlay-backdrop" onClick={closeOverlay}>
+    <div className="overlay-backdrop" data-tap onClick={closeOverlay}>
       <div className={`panel map-panel ${imp ? 'imp' : ''}`} onClick={(e) => e.stopPropagation()}>
         <button className="close-x" onClick={closeOverlay}>
           ✕

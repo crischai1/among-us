@@ -3,6 +3,7 @@ import { MAPS } from '../../shared/map';
 import type { MapDef } from '../../shared/map/types';
 import { pointInPolygon, pointInRect } from '../../shared/geom';
 import type { MapId } from '../../shared/settings';
+import { isTouchDevice } from '../input/touch';
 import { CrewmateSvg } from './CrewmateSvg';
 import { markScale, roomCenter, ShipSvg } from './MapOverlay';
 
@@ -268,6 +269,7 @@ function RulesTab() {
         <h3>Controls</h3>
         <div className="help-keys">
           {[
+            ...(isTouchDevice ? [['Touch + drag', 'Move (on the game view)']] : []),
             ['WASD / Arrows', 'Move'],
             ['E / Space', 'Use, do task, fix'],
             ['Q', 'Kill'],
@@ -275,6 +277,7 @@ function RulesTab() {
             ['V', 'Vent'],
             ['Tab / M', 'Map (sabotage map for impostors)'],
             ['F', 'Shapeshift'],
+            ['/', 'Open chat (lobby, meetings, ghosts)'],
             ['Esc', 'Close panel'],
           ].map(([k, v]) => (
             <div key={k} className="help-key">

@@ -1,10 +1,12 @@
 import { useEffect } from 'react';
 import { closeOverlay, doKill, doReport, doUse, doVent, openOverlay, toggleMap } from '../game/actions';
 import { installKeyboard, onAction } from '../input/keyboard';
+import { installTapZones } from '../input/touch';
 import { send } from '../net/session';
 import { debugEnabled, debugState } from '../render/debug';
 import { useGame } from '../store/game';
 import { useSession } from '../store/session';
+import { openChat } from './Chat';
 import { GameHud } from './GameHud';
 import { LobbyHud } from './LobbyHud';
 import { Overlays } from './Overlays';
@@ -18,9 +20,15 @@ export function RoomView() {
 
   useEffect(() => {
     const off1 = installKeyboard();
-    const off2 = onAction((k) => {
+    const off3 = installTapZones();
+    const off2 = onAction((k, e) => {
       const game = useGame.getState();
       if (k === 'escape') return closeOverlay();
+      if (k === '/') {
+        // Also stops Firefox's quick-find from grabbing the key.
+        e.preventDefault();
+        return openChat();
+      }
       if (game.pub?.phase === 'meeting') return;
       switch (k) {
         case 'e':
@@ -54,6 +62,7 @@ export function RoomView() {
     return () => {
       off1();
       off2();
+      off3();
     };
   }, []);
 
@@ -70,6 +79,7 @@ export function RoomView() {
           </div>
         ))}
       </div>
+      <div className="rotate-hint">↻ Turn your phone sideways for the best view</div>
       {status === 'reconnecting' && <div className="reconnecting">Reconnecting…</div>}
     </div>
   );

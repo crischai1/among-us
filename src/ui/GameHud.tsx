@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { CRITICAL_SABOTAGES, isImpostorRole, ROLE_LABEL } from '../../shared/types';
+import { isTouchDevice } from '../input/touch';
 import { canPressButton, doKill, doReport, doUse, doVent, openOverlay, toggleMap } from '../game/actions';
 import { lastRtt, serverNow } from '../net/clock';
 import { leaveRoom, send } from '../net/session';
@@ -8,7 +9,7 @@ import { useGame } from '../store/game';
 import { useSession } from '../store/session';
 import { jitter, world } from '../world/world';
 import { TASK_THEME } from '../tasks/theme';
-import { Chat } from './Chat';
+import { Chat, useOnOpenChat } from './Chat';
 import { Cutscenes } from './cutscenes/Cutscenes';
 import { MeetingScreen } from './MeetingScreen';
 
@@ -55,7 +56,8 @@ export function GameHud() {
 function TaskPanel({ dead }: { dead: boolean }) {
   const pub = useGame((s) => s.pub)!;
   const priv = useGame((s) => s.priv)!;
-  const [open, setOpen] = useState(true);
+  // Collapsed on phones so the list doesn't cover the view; one tap opens it.
+  const [open, setOpen] = useState(!isTouchDevice);
   const now = useNow(500);
   const imp = isImpostorRole(priv.role);
   const sab = pub.sabotage;
@@ -147,7 +149,7 @@ function ConnectionBadge() {
 function TopRight({ dead }: { dead: boolean }) {
   const room = useSession((s) => s.room);
   return (
-    <div className="top-right">
+    <div className="top-right" data-tap>
       <button className="hud-btn small-round" title="Map (Tab)" onClick={toggleMap}>
         🗺
       </button>
@@ -208,7 +210,7 @@ function ActionButtons({ dead }: { dead: boolean }) {
   const buttonWait = use?.kind === 'button' ? pub.buttonReadyAt - now : 0;
 
   return (
-    <div className="actions">
+    <div className="actions" data-tap>
       {imp && (
         <ActionButton
           label="SABOTAGE"
@@ -285,7 +287,7 @@ function VentArrows() {
     if (Math.abs(arrows[i].a - arrows[i - 1].a) < 0.6) arrows[i].r = arrows[i - 1].r + 64;
   }
   return (
-    <div className="vent-arrows">
+    <div className="vent-arrows" data-tap>
       {arrows.map(({ id, v, a, r }) => (
         <button
           key={id}
@@ -305,9 +307,10 @@ function VentArrows() {
 function GhostChat() {
   const [open, setOpen] = useState(false);
   const unread = useGame((s) => s.unread);
+  useOnOpenChat(() => setOpen(true));
   return (
     <div className="ghost-chat">
-      <button className="btn small" onClick={() => setOpen(!open)}>
+      <button className="btn small" title="Ghost chat (/)" onClick={() => setOpen(!open)}>
         👻 Ghost chat {!open && unread > 0 && <b className="badge">{unread}</b>}
       </button>
       {open && <Chat channels={['ghost']} canSend className="panel" placeholder="Only ghosts can see this" />}

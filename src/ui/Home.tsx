@@ -4,6 +4,7 @@ import { createRoom, joinRoom, savedName } from '../net/session';
 import { useSession } from '../store/session';
 import { CrewmateSvg } from './CrewmateSvg';
 import { HelpOverlay } from './HelpOverlay';
+import { isTouchDevice } from '../input/touch';
 
 export function Home() {
   const error = useSession((s) => s.error);
@@ -66,7 +67,11 @@ export function Home() {
         <button className="btn small home-howto" onClick={() => setHelp(true)}>
           ❓ How to Play · Rules &amp; Map
         </button>
-        <div className="home-help">WASD / arrows to move · E use · Q kill · R report · V vent · Tab map</div>
+        <div className="home-help">
+          {isTouchDevice
+            ? 'Touch and drag anywhere to move · tap the buttons to act'
+            : 'WASD / arrows to move · E use · Q kill · R report · V vent · Tab map · / chat'}
+        </div>
       </div>
       {help && <HelpOverlay onClose={() => setHelp(false)} />}
     </div>
