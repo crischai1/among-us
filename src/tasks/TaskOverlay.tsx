@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { TASK_DEFS } from '../../shared/rules/tasks';
 import { closeOverlay, setTaskFinishing } from '../game/actions';
 import { send } from '../net/session';
@@ -16,6 +16,9 @@ export function TaskOverlay({ stationId }: { stationId: string }) {
   const [snapshot] = useState(task);
   const openedAt = useRef(performance.now());
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const completeRef = useRef<() => void>(() => {});
+  // Stable identity: games with timers in effects keyed on onComplete would restart on every state push.
+  const onComplete = useCallback(() => completeRef.current(), []);
 
   useEffect(() => {
     // Comms sabotage hides the task list but shouldn't kick you out of a task.
@@ -33,8 +36,8 @@ export function TaskOverlay({ stationId }: { stationId: string }) {
   const t = snapshot ?? task;
   if (!t) return null;
   const Game = TASK_GAMES[t.type];
-  const complete = () => {
-    if (done) return;
+  completeRef.current = () => {
+    if (done || timers.current.length) return;
     setDone(true);
     setTaskFinishing(true);
     // The server enforces a minimum time per step; report only once that has safely passed.
@@ -65,7 +68,7 @@ export function TaskOverlay({ stationId }: { stationId: string }) {
           {t.steps > 1 && <span className="task-steps">Step {t.step + 1} of {t.steps}</span>}
         </div>
         <div className="task-body">
-          <Game step={t.step} params={t.params} onComplete={complete} />
+          <Game step={t.step} params={t.params} onComplete={onComplete} />
           {done && <div className="task-complete outline-text">Task Completed!</div>}
         </div>
       </div>
